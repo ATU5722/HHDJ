@@ -1,10 +1,8 @@
 ﻿// ==UserScript==
-// @name         [HV]AAD Modular
-// @name:zh-CN   [HV]AAD Modular
-// @description  High-performance modular architecture for HV AutoAttack
-// @description:zh-CN 高性能模块化架构的HV自动攻击脚本
-// @version      1.3.2
-// @author       D (Modularized)
+// @name         AADB
+// @description:zh-CN 挂机
+// @version      1.3.3
+// @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
 // @include      https://e-hentai.org/*
@@ -29,8 +27,8 @@
 
 // ==================== 全局常量和配置 ====================
 const GAME_MECHANICS = {
-  BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（怪物最多6个Buff）
-  DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（剩余回合>2才有效）
+  BUFF_SLOT_LIMIT: 6,              // Buff槽位上限
+  DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值
   DAILY_RESET_RANDOM_MIN_MINUTES: 30, // 每日重置延迟最小分钟数
   DAILY_RESET_RANDOM_MAX_MINUTES: 180, // 每日重置延迟最大分钟数
   ENCOUNTER_DAILY_LIMIT_MIN: 12,   // 每日遭遇战随机上限最小值
@@ -2098,10 +2096,7 @@ const AAD = {
       initBattleState() {
         // 重置结束标志
         AAD.Core.State.set('end', false);
-
-        // 缓存战斗元素
         this.ensureBattleElements();
-
        
       },
 
@@ -2255,7 +2250,7 @@ const AAD = {
         const hpMost = Math.max.apply(null, hpArray);
         const ruleReverse = option.ruleReverse;
 
-        // 第二次循环 - 计算权重 + 特殊怪物调整（合并原循环2和3）
+        // 第二次循环 - 计算权重 + 特殊怪物调整
         for (let i = 0; i < monsterStatus.length; i++) {
           // 1. 计算基础权重
           if (monsterStatus[i].isDead) {
@@ -2639,7 +2634,7 @@ const AAD = {
           let targetCount = 0;
 
           if (option.debuffSkillAllSleep && AAD.Utils.Condition.evaluateConditionGroups(option['debuffSkillallsleepCondition'])) {
-            const sleepCount = this.countBuffInSnapshot(buffSnapshot, 'sleep', 2); 
+            const sleepCount = this.countBuffInSnapshot(buffSnapshot, 'sleep', GAME_MECHANICS.DEBUFF_EFFECTIVE_TURNS); 
             const minAwake = 3;
             const awakeMonstersCount = monsterAlive - sleepCount;
             if (awakeMonstersCount > minAwake) {

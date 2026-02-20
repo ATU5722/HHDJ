@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.2.8
+// @version      3.3.0
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,12 +28,26 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 300, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 400, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 20, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 110, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
+
+const IW_TASK_STATUS = Object.freeze({
+  WAITING: 'waiting',
+  RUNNING: 'running',
+  DONE: 'done',
+  ERROR: 'error'
+});
+
+const IW_TASK_STATUS_LABELS = Object.freeze({
+  [IW_TASK_STATUS.WAITING]: '等待',
+  [IW_TASK_STATUS.RUNNING]: '进行',
+  [IW_TASK_STATUS.DONE]: '完成',
+  [IW_TASK_STATUS.ERROR]: '错误'
+});
 
 // ==================== 常量定义 ====================
 // 统计计算相关的数值字段定义
@@ -439,7 +453,7 @@ const AAD = {
       ISOLATED_KEYS: new Set([
         'option', 'backup', 'roundType', 'roundNow', 'roundAll',
         'monsterStatus', 'arena', 'dailyReset_arena', 'disabled', 'missanswer',
-        'prices', 'page_temp_data'
+        'prices', 'page_temp_data', 'iwState'
       ]),
 
       // 世界隔离键映射
@@ -698,7 +712,7 @@ const AAD = {
     // ===== 持久化数据层 =====
     Database: {
       dbName: 'AADB',
-      dbVersion: 1,
+      dbVersion: 2,
       storeName: 'battles',
       db: null,
 
@@ -737,6 +751,16 @@ const AAD = {
         // 备用索引：isekai + endTime（当不指定 battleType 时）
         if (!store.indexNames.contains('isekai_time')) {
           store.createIndex('isekai_time', ['isekai', 'endTime']);
+        }
+
+        // 按天索引：isekai + date（用于按天查询早停）
+        if (!store.indexNames.contains('isekai_date')) {
+          store.createIndex('isekai_date', ['isekai', 'date']);
+        }
+
+        // 按天索引：isekai + battleType + date（用于按天查询早停）
+        if (!store.indexNames.contains('isekai_type_date')) {
+          store.createIndex('isekai_type_date', ['isekai', 'battleType', 'date']);
         }
       },
 
@@ -831,7 +855,6 @@ const AAD = {
         return new Promise((resolve, reject) => {
           const request = store.put(battleRecord);
           request.onsuccess = () => {
-            console.log('[Database] 战斗数据保存成功:', uniqueKey);
             resolve(battleRecord);
           };
           request.onerror = () => reject(request.error);
@@ -907,35 +930,42 @@ const AAD = {
 
   
 
-      // 查询战斗数据
-      async queryBattlesOptimized(criteria = {}) {
+      // 查询战斗数据（记录级，达到limit后立即停止）
+      async queryBattlesLimited(criteria = {}) {
         try {
           const db = await this.init();
           const transaction = db.transaction([this.storeName], 'readonly');
           const store = transaction.objectStore(this.storeName);
+          const limitRaw = Number(criteria.limit);
+          const limit = Number.isFinite(limitRaw) ? Math.max(0, limitRaw) : 100;
 
-          // 选择最优索引和构建范围
+          if (limit <= 0) {
+            return [];
+          }
+
           const { index, range, direction } = this._selectBestIndex(store, criteria);
 
           return new Promise((resolve, reject) => {
             const results = [];
-            const request = index ? index.openCursor(range, direction) : store.openCursor(range, direction);
+            const request = index.openCursor(range, direction);
 
             request.onsuccess = (event) => {
               const cursor = event.target.result;
-              if (cursor) {
-                const record = cursor.value;
-
-                // 应用额外的过滤条件
-                if (this._matchesCriteria(record, criteria)) {
-                  results.push(record);
-                }
-
-                cursor.continue();
-              } else {
-                // 遍历完成
+              if (!cursor) {
                 resolve(results);
+                return;
               }
+
+              const record = cursor.value;
+              if (this._matchesCriteria(record, criteria)) {
+                results.push(record);
+                if (results.length >= limit) {
+                  resolve(results);
+                  return;
+                }
+              }
+
+              cursor.continue();
             };
 
             request.onerror = () => reject(request.error);
@@ -944,6 +974,166 @@ const AAD = {
           console.error('[Database] 查询战斗数据失败:', error);
           throw error;
         }
+      },
+
+      // 按天查询并直接返回日聚合行（达到limitDays后立即停止）
+      async queryDailyAggregates(criteria = {}) {
+        try {
+          const db = await this.init();
+          const transaction = db.transaction([this.storeName], 'readonly');
+          const store = transaction.objectStore(this.storeName);
+          const limitDaysRaw = Number(criteria.limitDays);
+          const limitDays = Number.isFinite(limitDaysRaw) ? Math.max(0, limitDaysRaw) : 50;
+
+          if (limitDays <= 0) {
+            return [];
+          }
+
+          const { index, range, direction, hasBattleType } = this._selectDailyIndex(store, criteria);
+
+          return new Promise((resolve, reject) => {
+            const results = [];
+            const request = index.openCursor(range, direction);
+
+            request.onsuccess = (event) => {
+              const cursor = event.target.result;
+              if (!cursor) {
+                resolve(results);
+                return;
+              }
+
+              const dateKey = hasBattleType ? cursor.key[2] : cursor.key[1];
+              const dayRange = hasBattleType
+                ? IDBKeyRange.only([criteria.isekai, criteria.battleType, dateKey])
+                : IDBKeyRange.only([criteria.isekai, dateKey]);
+              const dayRequest = index.getAll(dayRange);
+
+              dayRequest.onsuccess = () => {
+                const records = (dayRequest.result || []).filter(record => this._matchesCriteria(record, criteria));
+                if (records.length > 0) {
+                  results.push(this._aggregateDailyRow(dateKey, records));
+                  if (results.length >= limitDays) {
+                    resolve(results);
+                    return;
+                  }
+                }
+
+                cursor.continue();
+              };
+
+              dayRequest.onerror = () => reject(dayRequest.error);
+            };
+
+            request.onerror = () => reject(request.error);
+          });
+        } catch (error) {
+          console.error('[Database] 按天查询失败:', error);
+          throw error;
+        }
+      },
+
+      _aggregateDailyRow(dateKey, records) {
+        const daily = {
+          timestamp: dateKey,
+          rawTime: AAD.Utils.Time.getUtcDayStartMs(dateKey),
+          utcDate: dateKey,
+          battle_type: '汇总',
+          rounds: 0, turns: 0, duration: '', tps: 0,
+          exp: 0, credit: 0, revenue: 0, cost: 0, profit: 0,
+          profit_without_ed: 0,
+          artifacts: 0, blood: 0, chaos: 0, legendary: 0, peerless: 0,
+          potions: 0, scrolls: 0, gems: 0,
+          potion_net_income: 0, scroll_net_income: 0,
+          attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
+          horse: 0, spark: 0, battleCount: 0, seconds: 0,
+          _dropData: {},
+          _usageData: { items: {}, magic: {}, proficiency: {}, resist: {} }
+        };
+
+        records.forEach(record => {
+          daily.rounds += record.rounds || 0;
+          daily.turns += record.turns || 0;
+          daily.exp += record.exp || 0;
+          daily.credit += record.credit || 0;
+          daily.revenue += record.revenue || 0;
+          daily.cost += record.cost || 0;
+          daily.profit += record.profit || 0;
+          daily.profit_without_ed += record.profitWithoutED || 0;
+          daily.artifacts += record.artifacts || 0;
+          daily.blood += record.blood || 0;
+          daily.chaos += record.chaos || 0;
+          daily.legendary += record.legendary || 0;
+          daily.peerless += record.peerless || 0;
+          daily.potions += record.potions || 0;
+          daily.scrolls += record.scrolls || 0;
+          daily.gems += record.gems || 0;
+          daily.potion_net_income += record.potionNetIncome || 0;
+          daily.scroll_net_income += record.scrollNetIncome || 0;
+          daily.attack_spells += record.attackSpells || 0;
+          daily.support_spells += record.supportSpells || 0;
+          daily.heal_spells += record.healSpells || 0;
+          daily.debuff_spells += record.debuffSpells || 0;
+          daily.horse += record.horse || 0;
+          daily.spark += record.spark || 0;
+          daily.seconds += record.duration || 0;
+          daily.battleCount += 1;
+
+          if (record.detailsCompressed?.drops) {
+            AAD.Utils.Aggregation.mergeDataObjects(daily._dropData, record.detailsCompressed.drops, ['Credit', 'CreditFromTrash', 'EXP']);
+          }
+
+          AAD.Utils.Aggregation.mergeDataObjects(daily._usageData, {
+            items: record.detailsCompressed?.items || {},
+            magic: record.detailsCompressed?.magic || {},
+            proficiency: record.detailsCompressed?.proficiency || {},
+            resist: record.detailsCompressed?.resist || {}
+          });
+        });
+
+        ['revenue', 'cost', 'profit', 'profit_without_ed'].forEach(field => {
+          daily[field] = AAD.Utils.Format.fixPrecision(daily[field], 2);
+        });
+        daily.duration = daily.seconds > 0 ? AAD.Utils.Format.formatDuration(daily.seconds) : '0s';
+        daily.tps = daily.seconds > 0 && daily.turns > 0 ? Math.round((daily.turns / daily.seconds) * 100) / 100 : 0;
+
+        return daily;
+      },
+
+      // 选择按天查询索引（查询优化器）
+      _selectDailyIndex(store, criteria) {
+        const isekai = criteria.isekai;
+        const battleType = criteria.battleType;
+        const startDateFromTime = criteria.startTime ? AAD.Utils.Time.getUtcDayKey(criteria.startTime) : null;
+        const endDateFromTime = criteria.endTime ? AAD.Utils.Time.getUtcDayKey(criteria.endTime) : null;
+        let startDate = criteria.startDate || startDateFromTime || '0000-01-01';
+        let endDate = criteria.endDate || endDateFromTime || '9999-12-31';
+        const direction = criteria.order === 'asc' ? 'nextunique' : 'prevunique';
+
+        if (startDate > endDate) {
+          const temp = startDate;
+          startDate = endDate;
+          endDate = temp;
+        }
+
+        if (isekai === undefined || isekai === null) {
+          throw new Error('[Database] 按天查询缺少isekai条件，无法选择索引');
+        }
+
+        if (battleType) {
+          const index = store.index('isekai_type_date');
+          const range = IDBKeyRange.bound(
+            [isekai, battleType, startDate],
+            [isekai, battleType, endDate]
+          );
+          return { index, range, direction, hasBattleType: true };
+        }
+
+        const index = store.index('isekai_date');
+        const range = IDBKeyRange.bound(
+          [isekai, startDate],
+          [isekai, endDate]
+        );
+        return { index, range, direction, hasBattleType: false };
       },
 
       // 选择最优索引（查询优化器）
@@ -986,10 +1176,10 @@ const AAD = {
         if (criteria.battleType && record.battleType !== criteria.battleType) {
           return false;
         }
-        if (criteria.startTime && record.endTime < criteria.startTime) {
+        if (criteria.startTime !== undefined && criteria.startTime !== null && record.endTime < criteria.startTime) {
           return false;
         }
-        if (criteria.endTime && record.endTime > criteria.endTime) {
+        if (criteria.endTime !== undefined && criteria.endTime !== null && record.endTime > criteria.endTime) {
           return false;
         }
         return true;
@@ -1201,6 +1391,25 @@ const AAD = {
         return (obj1, obj2) => {
           return (obj2[key] < obj1[key]) ? 1 : (obj2[key] > obj1[key]) ? -1 : 0;
         };
+      }
+    },
+
+    // 统计聚合工具函数
+    Aggregation: {
+      mergeDataObjects(target, source, excludeKeys = []) {
+        const excludeSet = new Set(excludeKeys);
+        for (const key in source) {
+          if (excludeSet.has(key)) continue;
+          const value = source[key];
+          if (typeof value === 'number') {
+            target[key] = (target[key] || 0) + value;
+          } else if (typeof value === 'object' && value !== null) {
+            if (!target[key]) target[key] = {};
+            this.mergeDataObjects(target[key], value, excludeKeys);
+          } else if (!target[key]) {
+            target[key] = value;
+          }
+        }
       }
     },
 
@@ -2046,8 +2255,6 @@ const AAD = {
           return;
         }
 
-        AAD.Utils.Common.showStatus('正在使用Channel技能...');
-
         // 按顺序检查Channel技能
         const skillPack = Array.isArray(option.channelSkillOrder) ? option.channelSkillOrder : [];
         if (skillPack.length > 0) {
@@ -2418,7 +2625,6 @@ const AAD = {
           if (AAD.Core.State.get('roundType') !== 'ba' && round !== null) {
             roundNow = round[1] * 1;
             roundAll = round[2] * 1;
-            console.log('[newRound] 从日志解析回合信息:', roundNow + '/' + roundAll);
           } else {
             roundNow = 1;
             roundAll = 1;
@@ -3545,6 +3751,231 @@ const AAD = {
       }
     },
 
+    // 自动IW模块
+    AutoIW: {
+      getState() {
+        const state = AAD.Core.Storage.getValue('iwState') || {};
+        return {
+          index: Number.isInteger(state.index) && state.index >= 0 ? state.index : 0
+        };
+      },
+
+      setState(state) {
+        AAD.Core.Storage.setValue('iwState', state);
+      },
+
+      resetState() {
+        this.setState({ index: 0 });
+      },
+
+      normalizeStatus(status) {
+        switch (status) {
+          case IW_TASK_STATUS.WAITING:
+          case IW_TASK_STATUS.RUNNING:
+          case IW_TASK_STATUS.DONE:
+          case IW_TASK_STATUS.ERROR:
+            return status;
+          default:
+            return IW_TASK_STATUS.WAITING;
+        }
+      },
+
+      normalizeTasks(tasks) {
+        if (!Array.isArray(tasks)) return [];
+        const normalized = [];
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i] || {};
+          const id = String(task.id || '').trim();
+          const target = parseInt(task.target, 10);
+          if (!id || !Number.isFinite(target) || target <= 0) continue;
+          normalized.push({
+            id: id,
+            target: target,
+            filter: String(task.filter || '').trim(),
+            title: String(task.title || '').trim(),
+            status: this.normalizeStatus(task.status)
+          });
+        }
+        return normalized;
+      },
+
+      persistTasks(tasks) {
+        const option = AAD.Core.Storage.getValue('option') || {};
+        const nextOption = { ...option, autoIWTasks: this.normalizeTasks(tasks) };
+        AAD.Core.Storage.setValue('option', nextOption);
+      },
+
+      finishAllTasks(option) {
+        const currentOption = option || AAD.Core.Storage.getValue('option') || {};
+        const nextOption = { ...currentOption, autoIW: false };
+        AAD.Core.Storage.setValue('option', nextOption);
+        this.resetState();
+      },
+
+      completeTask(state, tasks, status = IW_TASK_STATUS.DONE) {
+        if (Array.isArray(tasks) && state.index >= 0 && state.index < tasks.length) {
+          tasks[state.index].status = this.normalizeStatus(status);
+          this.persistTasks(tasks);
+        }
+        state.index += 1;
+        this.setState(state);
+        if (state.index >= tasks.length) {
+          this.finishAllTasks();
+        }
+      },
+
+      skipTaskOnError(state, tasks) {
+        this.completeTask(state, tasks, IW_TASK_STATUS.ERROR);
+      },
+
+      ensureIwPage(task) {
+        const params = new URLSearchParams(window.location.search);
+        const isIwPage = params.get('s') === 'Battle' &&
+                         params.get('ss') === 'iw' &&
+                         params.get('screen') === 'itemworld';
+        const currentFilter = params.get('filter') || '';
+        const targetFilter = task.filter || '';
+
+        if (isIwPage && (!targetFilter || targetFilter === currentFilter)) {
+          return true;
+        }
+
+        const nextUrl = targetFilter
+          ? `?s=Battle&ss=iw&screen=itemworld&filter=${encodeURIComponent(targetFilter)}`
+          : '?s=Battle&ss=iw&screen=itemworld';
+        window.location.href = nextUrl;
+        return false;
+      },
+
+      findEquipCheckbox(taskId) {
+        return document.getElementById(`e${taskId}`);
+      },
+
+      parseIwLevel(checkbox) {
+        const row = checkbox && checkbox.closest ? checkbox.closest('tr') : null;
+        const levelCell = row ? row.querySelector('td:nth-child(2)') : null;
+        if (!levelCell) {
+          throw new Error('iw_level_cell_missing');
+        }
+
+        const nums = (levelCell.textContent || '').match(/\d+/g);
+        if (!nums || nums.length < 3) {
+          throw new Error('iw_level_parse_failed');
+        }
+
+        const current = parseInt(nums[1], 10);
+        const cap = parseInt(nums[2], 10);
+        if (!Number.isFinite(current) || !Number.isFinite(cap) || cap <= 0) {
+          throw new Error('iw_level_invalid');
+        }
+
+        return { current, cap };
+      },
+
+      findConfirmButton() {
+        const confirmOuter = document.getElementById('confirm_outer');
+        if (!confirmOuter) {
+          return null;
+        }
+
+        const outerStyle = window.getComputedStyle(confirmOuter);
+        const outerVisible = outerStyle.visibility !== 'hidden' &&
+                             outerStyle.display !== 'none' &&
+                             outerStyle.opacity !== '0';
+        if (!outerVisible) {
+          return null;
+        }
+
+        const directButton = confirmOuter.querySelector('#confirm_button');
+        if (directButton &&
+            !directButton.disabled) {
+          return directButton;
+        }
+        return null;
+      },
+
+      async selectEquipAndEnter(task, checkbox, state) {
+        if (!checkbox.checked) {
+          const row = checkbox.closest('tr');
+          if (row && typeof row.click === 'function') {
+            row.click();
+          } else {
+            checkbox.click();
+          }
+        }
+
+        const delayMs = 2000 + Math.random() * 3000;
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+
+        const enterButton = document.getElementById('equipsubmit');
+        if (!enterButton || enterButton.disabled) {
+          throw new Error('iw_enter_unavailable');
+        }
+
+        enterButton.click();
+
+        const confirmButton = this.findConfirmButton();
+        if (!confirmButton) {
+          throw new Error('iw_confirm_missing');
+        }
+
+        confirmButton.click();
+        return true;
+      },
+
+      async runAutoIW() {
+        if (!AAD.Runtime.isIsekai()) {
+          return;
+        }
+
+        const option = AAD.Core.Storage.getValue('option') || {};
+        if (!option.autoIW) {
+          return;
+        }
+
+        const tasks = this.normalizeTasks(option.autoIWTasks);
+        if (!tasks.length) {
+          this.finishAllTasks(option);
+          return;
+        }
+
+        const state = this.getState();
+        if (state.index >= tasks.length) {
+          this.finishAllTasks(option);
+          return;
+        }
+
+        while (state.index < tasks.length) {
+          const task = tasks[state.index];
+
+          const isReady = this.ensureIwPage(task);
+          if (!isReady) {
+            return;
+          }
+
+          try {
+            const checkbox = this.findEquipCheckbox(task.id);
+            if (!checkbox) {
+              this.completeTask(state, tasks);
+              continue;
+            }
+
+            const level = this.parseIwLevel(checkbox);
+            const effectiveTarget = Math.min(task.target, level.cap);
+            if (level.current >= effectiveTarget) {
+              this.completeTask(state, tasks);
+              continue;
+            }
+
+            await this.selectEquipAndEnter(task, checkbox, state);
+            return;
+          } catch (error) {
+            this.skipTaskOnError(state, tasks);
+          }
+        }
+      }
+    },
+
     // 遭遇战逻辑模块
     Encounter: {
       timerId: null,
@@ -3916,13 +4347,26 @@ const AAD = {
           await this.handleEquipmentRepair(option);
         }
 
-        // 启动闲置竞技场 
-        if (option.idleArena) {
+        // 竞技场优先：竞技场未完成时优先执行竞技场
+        const arenaState = AAD.Core.Storage.getValue('arena');
+        const todayKey = AAD.Utils.Time.getUtcDayKey();
+        const arenaCompleted = !!(arenaState &&
+                                  arenaState.dayKey === todayKey &&
+                                  arenaState.isOk &&
+                                  arenaState.completeHandled);
+
+        if (option.idleArena && !arenaCompleted) {
           const delay = AAD.Utils.Time.getIdleArenaDelay();
           console.log(`[闲置竞技场] 将在${(delay / 1000).toFixed(1)}秒后检查竞技场`);
           setTimeout(() => {
             AAD.Logic.Arena.runArena();
           }, delay);
+          return;
+        }
+
+        // 自动IW：仅在竞技场关闭或竞技场完成后执行
+        if (option.autoIW && Array.isArray(option.autoIWTasks) && option.autoIWTasks.length > 0) {
+          await AAD.Logic.AutoIW.runAutoIW();
         }
       },
 
@@ -4084,10 +4528,9 @@ const AAD = {
           crossWorldState.jumping = true;  // 标记正在跳转中
           this.setCrossWorldState(crossWorldState);
 
-          const delay = AAD.Utils.Time.getRandomDelayMs(5000, 18000);
-          console.log(`[跨世界] 异世界竞技场完成，${(delay/1000).toFixed(1)}秒后返回主世界`);
+          console.log('[跨世界] 异世界竞技场完成，立即返回主世界');
           document.title = AAD.Utils.Common.alert(-1, '异世界完成');
-          setTimeout(() => this.returnToMainWorld(), delay);
+          this.returnToMainWorld();
         } else {
           // 主世界完成 → 跳转异世界
           crossWorldState.phase = 'isekai';
@@ -4095,10 +4538,9 @@ const AAD = {
           crossWorldState.jumping = true;  // 标记正在跳转中
           this.setCrossWorldState(crossWorldState);
 
-          const delay = AAD.Utils.Time.getRandomDelayMs(5000, 18000);
-          console.log(`[跨世界] 主世界竞技场完成，${(delay/1000).toFixed(1)}秒后跳转异世界`);
+          console.log('[跨世界] 主世界竞技场完成，立即跳转异世界');
           document.title = AAD.Utils.Common.alert(-1, '主世界完成');
-          setTimeout(() => this.jumpToIsekai(), delay);
+          this.jumpToIsekai();
         }
       },
 
@@ -4124,9 +4566,7 @@ const AAD = {
 
         console.log(`[跨世界] 跳转到: ${targetUrl}`);
 
-        setTimeout(() => {
-          AAD.UI.UITools.openUrl(targetUrl);
-        }, 3000);
+        AAD.UI.UITools.openUrl(targetUrl);
       }
     },
 
@@ -4650,7 +5090,6 @@ const AAD = {
         // 火花检测
         if (text.match(/You gain the effect Cloak of the Fallen/)) {
           combat.stats.sparkCount = (combat.stats.sparkCount || 0) + 1;
-          console.log('[火花] 触发，总计: ' + combat.stats.sparkCount);
         } else if (text.match(/You gain .* proficiency/)) {
           reg = text.match(/You gain ([\d.]+) points of (.*?) proficiency/);
           magic = reg[2];
@@ -4915,103 +5354,6 @@ const AAD = {
         return result;
       },
 
-      // 合并数据对象（递归合并）
-      mergeDataObjects(target, source, excludeKeys = []) {
-        const excludeSet = new Set(excludeKeys);
-
-        for (const key in source) {
-          if (!excludeSet.has(key)) {
-            if (typeof source[key] === 'number') {
-              target[key] = (target[key] || 0) + source[key];
-            } else if (typeof source[key] === 'object' && source[key] !== null) {
-              if (!target[key]) target[key] = {};
-              this.mergeDataObjects(target[key], source[key], excludeKeys);
-            } else if (!target[key]) {
-              target[key] = source[key];
-            }
-          }
-        }
-      },
-
-      // 按天聚合统计数据
-      aggregateByDay(data) {
-        const dailyData = {};
-
-        data.forEach(record => {
-          const dateStr = record.utcDate;
-          const daily = this._ensureDailyRecord(dailyData, dateStr);
-
-          // 批量累加所有数值字段
-          STATISTICS_NUMERIC_FIELDS.forEach(field => {
-            daily[field] += record[field] || 0;
-          });
-
-          daily.battleCount += 1;
-          daily.seconds += record.seconds || 0;
-
-          // 合并掉落和使用数据
-          this._mergeDropData(daily, record);
-          this._mergeUsageData(daily, record);
-        });
-
-        // 后处理：精度修正和TPS计算
-        this._finalizeDailyData(dailyData);
-        return Object.values(dailyData);
-      },
-
-      // 确保每日记录存在（私有方法）
-      _ensureDailyRecord(dailyData, dateStr) {
-        if (!dailyData[dateStr]) {
-          dailyData[dateStr] = {
-            timestamp: dateStr,
-            battle_type: '汇总',
-            rounds: 0, turns: 0, duration: '', tps: 0,
-            exp: 0, credit: 0, revenue: 0, cost: 0, profit: 0,
-            profit_without_ed: 0,
-            artifacts: 0, blood: 0, chaos: 0, legendary: 0, peerless: 0,
-            potions: 0, scrolls: 0, gems: 0,
-            potion_net_income: 0, scroll_net_income: 0,
-            attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
-            horse: 0, spark: 0, battleCount: 0, seconds: 0,
-            _dropData: {},
-            _usageData: { items: {}, magic: {}, proficiency: {}, resist: {} }
-          };
-        }
-        return dailyData[dateStr];
-      },
-
-      // 合并掉落数据（私有方法）
-      _mergeDropData(daily, record) {
-        if (!record._dropData) return;
-        this.mergeDataObjects(daily._dropData, record._dropData, ['Credit', 'CreditFromTrash', 'EXP']);
-      },
-
-      // 合并使用数据（私有方法）
-      _mergeUsageData(daily, record) {
-        if (record._usageData) {
-          this.mergeDataObjects(daily._usageData, record._usageData, []);
-        }
-      },
-
-      // 完成每日数据处理（私有方法）
-      _finalizeDailyData(dailyData) {
-        Object.values(dailyData).forEach(daily => {
-          // 修正财务数据精度
-          ['revenue', 'cost', 'profit', 'profit_without_ed'].forEach(field => {
-            daily[field] = AAD.Utils.Format.fixPrecision(daily[field], 2);
-          });
-
-          // 计算时长和TPS
-          if (daily.seconds > 0) {
-            daily.duration = AAD.Utils.Format.formatDuration(daily.seconds);
-            daily.tps = daily.turns > 0 ? Math.round((daily.turns / daily.seconds) * 100) / 100 : 0;
-          } else {
-            daily.duration = '0s';
-            daily.tps = 0;
-          }
-        });
-      },
-
       // 统计马事件数量
       countHorseEvents(combat) {
         if (!combat || !combat.stats) return 0;
@@ -5024,25 +5366,24 @@ const AAD = {
         return combat.stats.sparkCount || 0;
       },
 
-      // 获取战斗数据
-      async getBattleData(optionsOrLimit = 100, battleType = null, isIsekai = null) {
+      buildStatsQueryOptions(optionsOrLimit = 100, battleType = null, isIsekai = null, defaultLimit = 100) {
         const options = (typeof optionsOrLimit === 'object' && optionsOrLimit !== null)
           ? optionsOrLimit
           : { limit: optionsOrLimit, battleType: battleType, isekai: isIsekai };
 
-        const limit = Number.isFinite(options.limit) ? Math.max(0, options.limit) : 100;
+        const limitValue = Number(options.limit);
+        const limit = Number.isFinite(limitValue) ? Math.max(0, limitValue) : defaultLimit;
         const normalizedBattleType = (typeof options.battleType === 'string' && options.battleType !== '')
           ? options.battleType
           : null;
         const order = options.order === 'asc' ? 'asc' : 'desc';
-
         const normalizeIsekai = (value) => {
           if (typeof value === 'boolean') return value ? 1 : 0;
           if (value === 0 || value === 1) return value;
           return null;
         };
         const normalizedIsekai = normalizeIsekai(options.isekai);
-        const includeAllWorlds = options.includeAllWorlds || normalizedIsekai === null;
+        const includeAllWorlds = !!options.includeAllWorlds || normalizedIsekai === null;
 
         const parseDateStart = (dateStr) => {
           if (!dateStr) return null;
@@ -5058,37 +5399,183 @@ const AAD = {
           return Number.isNaN(time) ? null : time;
         };
 
+        const normalizeDateKey = (dateStr) => {
+          if (!dateStr || typeof dateStr !== 'string') return null;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+          const time = new Date(dateStr).getTime();
+          if (Number.isNaN(time)) return null;
+          return new Date(time).toISOString().split('T')[0];
+        };
+
         let startTime = parseDateStart(options.dateFrom);
         let endTime = parseDateEnd(options.dateTo);
+        let startDate = normalizeDateKey(options.dateFrom);
+        let endDate = normalizeDateKey(options.dateTo);
+
         if (startTime !== null && endTime !== null && startTime > endTime) {
-          const temp = startTime;
+          const tempTime = startTime;
           startTime = endTime;
-          endTime = temp;
+          endTime = tempTime;
+          const tempDate = startDate;
+          startDate = endDate;
+          endDate = tempDate;
+        } else if (startDate && endDate && startDate > endDate) {
+          const tempDate = startDate;
+          startDate = endDate;
+          endDate = tempDate;
+        }
+
+        return {
+          limit,
+          battleType: normalizedBattleType,
+          order,
+          isekai: normalizedIsekai,
+          includeAllWorlds,
+          startTime,
+          endTime,
+          startDate,
+          endDate
+        };
+      },
+
+      async getBattleDataByRecord(optionsOrLimit = 100, battleType = null, isIsekai = null) {
+        const queryOptions = this.buildStatsQueryOptions(optionsOrLimit, battleType, isIsekai, 100);
+        if (queryOptions.limit <= 0) {
+          return [];
         }
 
         const criteriaBase = {
-          order: order
+          order: queryOptions.order,
+          limit: queryOptions.limit
         };
-        if (normalizedBattleType) criteriaBase.battleType = normalizedBattleType;
-        if (startTime !== null) criteriaBase.startTime = startTime;
-        if (endTime !== null) criteriaBase.endTime = endTime;
+        if (queryOptions.battleType) criteriaBase.battleType = queryOptions.battleType;
+        if (queryOptions.startTime !== null) criteriaBase.startTime = queryOptions.startTime;
+        if (queryOptions.endTime !== null) criteriaBase.endTime = queryOptions.endTime;
 
-        let results = [];
-        if (includeAllWorlds) {
+        let rawRecords = [];
+        if (queryOptions.includeAllWorlds) {
           const [mainData, isekaiData] = await Promise.all([
-            AAD.Core.Database.queryBattlesOptimized(Object.assign({ isekai: 0 }, criteriaBase)),
-            AAD.Core.Database.queryBattlesOptimized(Object.assign({ isekai: 1 }, criteriaBase))
+            AAD.Core.Database.queryBattlesLimited(Object.assign({ isekai: 0 }, criteriaBase)),
+            AAD.Core.Database.queryBattlesLimited(Object.assign({ isekai: 1 }, criteriaBase))
           ]);
 
-          results = mainData.concat(isekaiData);
-          const direction = order === 'asc' ? 1 : -1;
-          results.sort((a, b) => direction * ((a.endTime || 0) - (b.endTime || 0)));
+          const direction = queryOptions.order === 'asc' ? 1 : -1;
+          rawRecords = mainData.concat(isekaiData)
+            .sort((a, b) => direction * ((a.endTime || 0) - (b.endTime || 0)))
+            .slice(0, queryOptions.limit);
         } else {
-          const criteria = Object.assign({ isekai: normalizedIsekai }, criteriaBase);
-          results = await AAD.Core.Database.queryBattlesOptimized(criteria);
+          rawRecords = await AAD.Core.Database.queryBattlesLimited(
+            Object.assign({ isekai: queryOptions.isekai }, criteriaBase)
+          );
         }
 
-        return results.slice(0, limit);
+        const unifiedRecords = [];
+        rawRecords.forEach(record => {
+          try {
+            const unifiedRecord = this.convertToUnifiedBattleRecord(record);
+            if (unifiedRecord && (unifiedRecord.exp >= 0 || unifiedRecord.credit >= 0 || unifiedRecord.rounds > 0)) {
+              unifiedRecords.push(unifiedRecord);
+            }
+          } catch (error) {
+            console.error('[BattleStats] 记录转换失败 ID:', record?.id, error);
+          }
+        });
+
+        return unifiedRecords;
+      },
+
+      async getBattleDataByDay(optionsOrLimit = 50, battleType = null, isIsekai = null) {
+        const queryOptions = this.buildStatsQueryOptions(optionsOrLimit, battleType, isIsekai, 50);
+        if (queryOptions.limit <= 0) {
+          return [];
+        }
+
+        const criteriaBase = {
+          order: queryOptions.order,
+          limitDays: queryOptions.limit
+        };
+        if (queryOptions.battleType) criteriaBase.battleType = queryOptions.battleType;
+        if (queryOptions.startDate) criteriaBase.startDate = queryOptions.startDate;
+        if (queryOptions.endDate) criteriaBase.endDate = queryOptions.endDate;
+        if (queryOptions.startTime !== null) criteriaBase.startTime = queryOptions.startTime;
+        if (queryOptions.endTime !== null) criteriaBase.endTime = queryOptions.endTime;
+
+        if (queryOptions.includeAllWorlds) {
+          const [mainRows, isekaiRows] = await Promise.all([
+            AAD.Core.Database.queryDailyAggregates(Object.assign({ isekai: 0 }, criteriaBase)),
+            AAD.Core.Database.queryDailyAggregates(Object.assign({ isekai: 1 }, criteriaBase))
+          ]);
+          return this._mergeDailyWorldRows(mainRows.concat(isekaiRows), queryOptions.order, queryOptions.limit);
+        }
+
+        return AAD.Core.Database.queryDailyAggregates(
+          Object.assign({ isekai: queryOptions.isekai }, criteriaBase)
+        );
+      },
+
+      _createDailyRow(dateKey) {
+        return {
+          timestamp: dateKey,
+          rawTime: AAD.Utils.Time.getUtcDayStartMs(dateKey),
+          utcDate: dateKey,
+          battle_type: '汇总',
+          rounds: 0, turns: 0, duration: '', tps: 0,
+          exp: 0, credit: 0, revenue: 0, cost: 0, profit: 0,
+          profit_without_ed: 0,
+          artifacts: 0, blood: 0, chaos: 0, legendary: 0, peerless: 0,
+          potions: 0, scrolls: 0, gems: 0,
+          potion_net_income: 0, scroll_net_income: 0,
+          attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
+          horse: 0, spark: 0, battleCount: 0, seconds: 0,
+          _dropData: {},
+          _usageData: { items: {}, magic: {}, proficiency: {}, resist: {} }
+        };
+      },
+
+      _accumulateDailyRow(target, source) {
+        STATISTICS_NUMERIC_FIELDS.forEach(field => {
+          target[field] += source[field] || 0;
+        });
+        target.battleCount += source.battleCount || 0;
+        target.seconds += source.seconds || 0;
+        if (source._dropData) {
+          AAD.Utils.Aggregation.mergeDataObjects(target._dropData, source._dropData, ['Credit', 'CreditFromTrash', 'EXP']);
+        }
+        if (source._usageData) {
+          AAD.Utils.Aggregation.mergeDataObjects(target._usageData, source._usageData);
+        }
+      },
+
+      _finalizeDailyRow(row) {
+        ['revenue', 'cost', 'profit', 'profit_without_ed'].forEach(field => {
+          row[field] = AAD.Utils.Format.fixPrecision(row[field], 2);
+        });
+        row.duration = row.seconds > 0 ? AAD.Utils.Format.formatDuration(row.seconds) : '0s';
+        row.tps = row.seconds > 0 && row.turns > 0 ? Math.round((row.turns / row.seconds) * 100) / 100 : 0;
+      },
+
+      _mergeDailyWorldRows(rows, order, limit) {
+        const dailyMap = new Map();
+
+        rows.forEach(row => {
+          const dateKey = row.timestamp || row.utcDate;
+          if (!dateKey) return;
+          if (!dailyMap.has(dateKey)) {
+            dailyMap.set(dateKey, this._createDailyRow(dateKey));
+          }
+          this._accumulateDailyRow(dailyMap.get(dateKey), row);
+        });
+
+        const mergedRows = Array.from(dailyMap.values());
+        mergedRows.forEach(row => this._finalizeDailyRow(row));
+        mergedRows.sort((a, b) => {
+          if (order === 'asc') {
+            return a.timestamp.localeCompare(b.timestamp);
+          }
+          return b.timestamp.localeCompare(a.timestamp);
+        });
+
+        return mergedRows.slice(0, limit);
       },
 
       // 清空所有数据
@@ -5292,7 +5779,7 @@ const AAD = {
             // 合并掉落数据
             if (row.drops || row._dropData) {
               const dropData = row.drops || row._dropData;
-              AAD.Data.Statistics.mergeDataObjects(summaryData.totalDropData, dropData);
+              AAD.Utils.Aggregation.mergeDataObjects(summaryData.totalDropData, dropData);
 
             }
 
@@ -5734,7 +6221,7 @@ const AAD = {
       // 构建自动化标签页
       buildAutomationTab() {
         return `
-          <div><input id="idleArena" type="checkbox"><label for="idleArena"><b>自动竞技场</b></label>
+          <div><input id="idleArena" type="checkbox"><label for="idleArena"><b>自动AR</b></label>
             <span class="dbTipText">场间延迟</span><input class="dbNumber" name="idleArenaTime" placeholder="60" type="text"> <button class="idleArenaReset">重置战斗</button>
             <button class="dbShowLevels">切换显示</button><button class="dbLevelsClear">清空</button><span class="dbTipText" id="idleArenaResetTime" style="margin-left:40px;"></span>
             <br>
@@ -5745,6 +6232,13 @@ const AAD = {
               <input id="arLevel_RB50" value="105" type="checkbox"><label for="arLevel_RB50">RB50</label> <input id="arLevel_RB75A" value="106" type="checkbox"><label for="arLevel_RB75A">RB75A</label> <input id="arLevel_RB75B" value="107" type="checkbox"><label for="arLevel_RB75B">RB75B</label> <input id="arLevel_RB75C" value="108" type="checkbox"><label for="arLevel_RB75C">RB75C</label> <input id="arLevel_RB200" value="111" type="checkbox"><label for="arLevel_RB200">RB200</label> <input id="arLevel_RB250" value="112" type="checkbox"><label for="arLevel_RB250">RB250</label><br>
               <input id="arLevel_TW" value="tw" type="checkbox"><label for="arLevel_TW">TW(isk)</label> <input id="arLevel_GF" value="gr" type="checkbox"><label for="arLevel_GF">GF <input class="dbNumber" name="idleArenaGrTime" placeholder="0" type="text"></label>
             </div>
+          </div>
+          <div style="border-top:1px solid #ccc;padding-top:8px;margin-top:8px;">
+              <input id="autoIW" type="checkbox"><label for="autoIW"><b>自动IW</b></label>
+              <span class="dbTipText">目标等级</span><input class="dbNumber" name="autoIWTargetLevel" placeholder="" type="text">
+            <button class="autoIWAddTask">增加任务</button><button class="autoIWClearTasks">清空任务</button>
+            <input type="hidden" name="autoIWTasksJson">
+            <div id="autoIWTaskList" class="dbTipText" style="margin-top:6px;"></div>
           </div>
           <div><input id="crossWorldArena" type="checkbox"><label for="crossWorldArena" style="color:#4CAF50;"><b>跨界连打</b></label>
             <button class="crossWorldJumpReset">重置跳转</button>
@@ -5762,7 +6256,7 @@ const AAD = {
           <div><input id="regifts" type="checkbox"><label for="regifts"><b>自动收礼</b></label></div>
           <div><input id="restoreStamina" type="checkbox"><label for="restoreStamina"><b>战前回复</b>: </label>
             <span class="dbTipText">战斗前，体力<<input class="dbNumber" name="staminaLow" placeholder="15" type="text"></label></span><br>
-            <span class="dbTipText">不勾选时，小于设定值则不进行自动竞技场</span></div>
+            <span class="dbTipText">不勾选时，小于设定值则不进行自动AR</span></div>
         `;
       },
 
@@ -5988,7 +6482,7 @@ const AAD = {
             <input id="pauseHotkey" type="checkbox"><label for="pauseHotkey">使用热键 <input class="dbNumber" name="pauseHotkeyStr" type="text"></label>
           </div>
           <div class="dbTipText"><b>外置按钮</b>
-            <input id="idleArenaExternalButton" type="checkbox"><label for="idleArenaExternalButton">自动竞技场开关</label>
+            <input id="idleArenaExternalButton" type="checkbox"><label for="idleArenaExternalButton">自动AR开关</label>
             <input id="battleStatsExternalButton" type="checkbox"><label for="battleStatsExternalButton">战斗数据按钮</label>
           </div>
           <div class="dbTipText"><b>动作延迟</b>  魔法/技能 <input class="dbNumber" name="delay" placeholder="0" type="text">ms  攻击/物品 <input class="dbNumber" name="delay2" placeholder="0" type="text">ms<br>
@@ -6129,6 +6623,20 @@ const AAD = {
             }
             this.orderState.idleArenaOrder = [];
             this.syncArenaOrderUI([], panel);
+            return;
+          }
+          if (target.closest('.autoIWAddTask')) {
+            this.addAutoIWTask(panel);
+            return;
+          }
+          if (target.closest('.autoIWClearTasks')) {
+            this.clearAutoIWTasks(panel);
+            return;
+          }
+          const removeTaskButton = target.closest('.autoIWRemoveTask');
+          if (removeTaskButton) {
+            const equipId = removeTaskButton.getAttribute('data-eqid') || '';
+            this.removeAutoIWTask(panel, equipId);
             return;
           }
           if (target.closest('.updateData_bid')) {
@@ -6453,6 +6961,144 @@ const AAD = {
         }
       },
 
+      getAutoIWTasksFromPanel(panel) {
+        const hiddenInput = panel.querySelector('input[name="autoIWTasksJson"]');
+        if (!hiddenInput || !hiddenInput.value) return [];
+        try {
+          return AAD.Logic.AutoIW.normalizeTasks(JSON.parse(hiddenInput.value));
+        } catch (error) {
+          return [];
+        }
+      },
+
+      setAutoIWTasksInPanel(panel, tasks) {
+        const normalized = AAD.Logic.AutoIW.normalizeTasks(tasks);
+        const hiddenInput = panel.querySelector('input[name="autoIWTasksJson"]');
+        if (hiddenInput) {
+          hiddenInput.value = JSON.stringify(normalized);
+        }
+        this.renderAutoIWTaskList(panel, normalized);
+      },
+
+      renderAutoIWTaskList(panel, tasks) {
+        const listContainer = panel.querySelector('#autoIWTaskList');
+        if (!listContainer) return;
+        listContainer.innerHTML = '';
+
+        const option = AAD.Core.Storage.getValue('option') || {};
+        const iwState = AAD.Core.Storage.getValue('iwState') || {};
+        const runningIndex = option.autoIW && Number.isInteger(iwState.index) ? iwState.index : -1;
+
+        if (!tasks.length) {
+          listContainer.textContent = '暂无任务';
+          return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i];
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin:2px 0;';
+
+          const info = document.createElement('span');
+          const title = task.title || `[${task.id}]`;
+          let status = AAD.Logic.AutoIW.normalizeStatus(task.status);
+          if (i === runningIndex && option.autoIW && status !== IW_TASK_STATUS.DONE && status !== IW_TASK_STATUS.ERROR) {
+            status = IW_TASK_STATUS.RUNNING;
+          }
+          const statusLabel = IW_TASK_STATUS_LABELS[status] || IW_TASK_STATUS_LABELS[IW_TASK_STATUS.WAITING];
+          info.textContent = `${i + 1}. ${title} 目标${task.target} ${statusLabel}`;
+
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'autoIWRemoveTask';
+          removeBtn.setAttribute('data-eqid', task.id);
+          removeBtn.textContent = '删除';
+
+          row.appendChild(info);
+          row.appendChild(removeBtn);
+          fragment.appendChild(row);
+        }
+
+        listContainer.appendChild(fragment);
+      },
+
+      persistAutoIWTasks(tasks, targetLevel) {
+        const option = AAD.Core.Storage.getValue('option') || {};
+        const nextOption = { ...option, autoIWTasks: AAD.Logic.AutoIW.normalizeTasks(tasks) };
+        if (Number.isFinite(targetLevel) && targetLevel > 0) {
+          nextOption.autoIWTargetLevel = targetLevel;
+        }
+        AAD.Core.Storage.setValue('option', nextOption);
+
+        const iwState = AAD.Core.Storage.getValue('iwState');
+        if (iwState && (iwState.index >= nextOption.autoIWTasks.length)) {
+          AAD.Core.Storage.setValue('iwState', { index: 0 });
+        }
+      },
+
+      addAutoIWTask(panel) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isIwPage = AAD.Runtime.isIsekai() &&
+                         urlParams.get('s') === 'Battle' &&
+                         urlParams.get('ss') === 'iw' &&
+                         urlParams.get('screen') === 'itemworld';
+        if (!isIwPage) {
+          alert('请在异世界 Item World 页面添加任务');
+          return;
+        }
+
+        const targetInput = panel.querySelector('input[name="autoIWTargetLevel"]');
+        const target = parseInt(targetInput ? targetInput.value : '', 10);
+        if (!Number.isFinite(target) || target <= 0) {
+          alert('请输入有效的目标等级');
+          return;
+        }
+
+        const checked = document.querySelectorAll('#equiplist input[name="eqids[]"]:checked');
+        if (!checked || checked.length === 0) {
+          alert('请先在IW页面勾选装备');
+          return;
+        }
+
+        const tasks = this.getAutoIWTasksFromPanel(panel);
+        const filter = urlParams.get('filter') || '';
+
+        for (let i = 0; i < checked.length; i++) {
+          const checkbox = checked[i];
+          const equipId = String(checkbox.value || '').trim();
+          if (!equipId) continue;
+          const label = checkbox.closest('label');
+          const title = label ? label.textContent.replace(/\s+/g, ' ').trim() : '';
+          const task = {
+            id: equipId,
+            target: target,
+            filter: filter,
+            title: title,
+            status: IW_TASK_STATUS.WAITING
+          };
+          const existingIndex = tasks.findIndex(item => item.id === equipId);
+          if (existingIndex >= 0) {
+            tasks[existingIndex] = task;
+          } else {
+            tasks.push(task);
+          }
+        }
+
+        this.setAutoIWTasksInPanel(panel, tasks);
+        this.persistAutoIWTasks(tasks, target);
+      },
+
+      removeAutoIWTask(panel, equipId) {
+        const tasks = this.getAutoIWTasksFromPanel(panel).filter(task => task.id !== equipId);
+        this.setAutoIWTasksInPanel(panel, tasks);
+        this.persistAutoIWTasks(tasks);
+      },
+
+      clearAutoIWTasks(panel) {
+        this.setAutoIWTasksInPanel(panel, []);
+        this.persistAutoIWTasks([]);
+      },
+
       // 更新技能顺序复选框状态
       updateSkillOrderCheckboxes(inputName, value, panel = document) {
         const skills = Array.isArray(value) ? value : [];
@@ -6556,6 +7202,20 @@ const AAD = {
           }
 
           if (!itemName) return;
+
+          if (itemName === 'autoIWTasksJson') {
+            const tasks = AAD.Logic.AutoIW.normalizeTasks((() => {
+              try {
+                return JSON.parse(itemValue || '[]');
+              } catch (error) {
+                return [];
+              }
+            })());
+            if (tasks.length > 0) {
+              config.autoIWTasks = tasks;
+            }
+            return;
+          }
 
           if (input.type === 'checkbox' && this.isOrderCheckbox(input, orderKeys)) {
             return;
@@ -6681,6 +7341,8 @@ const AAD = {
           const currentTheme = AAD.UI.Theme.themes[savedTheme] ? savedTheme : 'white';
           themeSelector.value = currentTheme;
         }
+
+        this.setAutoIWTasksInPanel(panel, config.autoIWTasks || []);
 
         this.handleSpecialConfigItems(panel);
 
@@ -6817,7 +7479,7 @@ const AAD = {
         const button = AAD.Utils.DOM.cE('button');
         button.id = 'idleArenaToggleButton';
         button.className = 'idleArenaToggleButton';
-        button.textContent = option.idleArena ? '自动竞技场:开' : '自动竞技场:关';
+        button.textContent = option.idleArena ? '自动AR:开' : '自动AR:关';
         button.onclick = () => {
           const current = AAD.Core.Storage.getValue('option') || {};
           const next = { ...current, idleArena: !current.idleArena };
@@ -6881,7 +7543,8 @@ const AAD = {
         const battleType = modal.querySelector('select[name="bsBattleType"]')?.value || ''
         const dateFrom = modal.querySelector('input[name="bsDateFrom"]')?.value || ''
         const dateTo = modal.querySelector('input[name="bsDateTo"]')?.value || ''
-        const limitRows = parseInt(modal.querySelector('input[name="bsLimitRows"]')?.value) || 50
+        const limitRowsInput = parseInt(modal.querySelector('input[name="bsLimitRows"]')?.value, 10)
+        const limitRows = Number.isFinite(limitRowsInput) ? Math.max(0, limitRowsInput) : 50
         const dailySummary = modal.querySelector('input[name="bsDailySummary"]')?.checked || false
 
         try {
@@ -6894,7 +7557,7 @@ const AAD = {
             isekai = 1;
           }
 
-          const battleData = await AAD.Data.Statistics.getBattleData({
+          const queryOptions = {
             limit: limitRows,
             battleType: battleType && battleType !== '' ? battleType : null,
             isekai: isekai,
@@ -6902,42 +7565,13 @@ const AAD = {
             dateFrom: dateFrom,
             dateTo: dateTo,
             order: 'desc'
-          });
+          };
 
-          // 去重并直接转换为统一格式
-          let unifiedBattleData = [];
-          const seenIds = new Set();
-
-          battleData.forEach(item => {
-            // 使用数据库ID作为唯一标识
-            const recordId = item.id;
-            const idKey = String(recordId);
-
-            if (!seenIds.has(idKey)) {
-              seenIds.add(idKey);
-
-              try {
-                const unifiedRecord = AAD.Data.Statistics.convertToUnifiedBattleRecord(item);
-                if (unifiedRecord && (unifiedRecord.exp >= 0 || unifiedRecord.credit >= 0 || unifiedRecord.rounds > 0)) {
-                  unifiedBattleData.push(unifiedRecord);
-                }
-              } catch (error) {
-                console.error('[BattleStats] 转换失败 ID:', idKey, error);
-              }
-            }
-          });
-
-          // 按时间排序（最新的在前）
-          unifiedBattleData.sort((a, b) => (b.rawTime || 0) - (a.rawTime || 0));
-
-          // 如果启用每日汇总，应用聚合函数
-          if (dailySummary && unifiedBattleData.length > 0) {
-            unifiedBattleData = AAD.Data.Statistics.aggregateByDay(unifiedBattleData);
-            // 按日期排序（最新的在前）
-            unifiedBattleData.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+          if (dailySummary) {
+            return await AAD.Data.Statistics.getBattleDataByDay(queryOptions);
           }
 
-          return unifiedBattleData;
+          return await AAD.Data.Statistics.getBattleDataByRecord(queryOptions);
         } catch (error) {
           console.error('[BattleStats] 获取组合数据失败:', error);
           throw error;

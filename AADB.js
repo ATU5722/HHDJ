@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.2.5
+// @version      3.2.8
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,10 +28,11 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 15, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 90, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 300, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 400, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
+  AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
 
 // ==================== 常量定义 ====================
@@ -57,7 +58,7 @@ const dbTableColumnsAll = {
     { column_name: '无双', field: 'peerless', tooltip: 'peerless_details', id: 'col_peerless', default: false }
   ],
   '收入消耗': [
-    { column_name: '经验', field: 'exp', id: 'col_exp', default: false },
+    { column_name: '经验', field: 'exp', tooltip: 'exp_details', id: 'col_exp', default: false },
     { column_name: 'C', field: 'credit', id: 'col_credit', default: false },
     { column_name: '收入', field: 'revenue', id: 'col_revenue', default: false },
     { column_name: '消耗', field: 'cost', id: 'col_cost', default: false },
@@ -324,7 +325,7 @@ const AAD = {
     PRESET_CONFIGS: {
       config1: {
         name: '元素法师',
-        description: '基本设置，适用于AR和GF，设置法系后使用',
+        description: '基本设置，可用于AR ,40锻造可用于 GF，设置法系后使用',
         config: JSON.parse('{"channelSkillSwitch":true,"buffSkillSwitch":true,"debuffSkillSwitch":true,"scrollSwitch":true,"dataRecordSwitch":true,"autoshard":true,"autoshardlist":"FC","autobuylist":"MP,SP,SW,SC,EC","staminaLow":15,"item":{"Cure":true,"FC":true,"HP":true,"HE":true,"MP":true,"ME":true,"SP":true,"SE":true,"LE":true,"ED":true,"HealthGem":true,"ManaGem":true,"SpiritGem":true,"MysticGem":true},"itemCureCondition":{"0":["hp,4,35","roundType,6,\u0027gr\u0027"],"1":["hp,4,45","hp,3,23","roundType,5,\u0027gr\u0027"],"2":["hp,4,48","_isCd_313,5,1","_isCd_11195,5,1"],"3":["hp,4,48","_isCd_313,5,1","roundNow,3,700"],"4":["hp,4,55","hp,3,23","sp,4,45"]},"itemFCCondition":{"0":["hp,4,21"],"1":["hp,4,23","roundType,5,\u0027gr\u0027"]},"itemHPCondition":{"0":["hp,4,30","roundType,6,\u0027gr\u0027"],"1":["hp,4,30","hp,3,23"],"2":["hp,4,25","_isCd_313,5,1"]},"itemHECondition":{"0":["hp,4,21","roundType,6,\u0027gr\u0027"],"1":["hp,4,1"]},"itemMPCondition":{"0":["mp,4,38"],"2":["mp,4,55","roundType,5,\u0027gr\u0027","roundNow,1,500"]},"itemMECondition":{"0":["mp,4,12"],"1":["mp,4,30","_buffTurn_sparklife,5,0"]},"itemSPCondition":{"0":["sp,4,45"],"1":["sp,4,55","roundType,5,\u0027gr\u0027"]},"itemSECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemLECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemEDCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,5,300"],"1":["roundType,5,\u0027gr\u0027","roundNow,5,600"]},"itemManaGemCondition":{"0":["mp,2,80"]},"channelSkill":{"AF":true,"Re":true},"channelSkillAFCondition":{"0":["_buffTurn_arcanemeditation,2,150"]},"channelSkillReCondition":{"0":["_buffTurn_regen,2,100"]},"buffSkill":{"HD":true,"MD":true,"SD":true,"AF":true,"Re":true},"buffSkillHDCondition":{"0":["hp,2,70"],"1":["hp,2,90","roundType,5,\u0027gr\u0027"]},"buffSkillMDCondition":{"0":["mp,2,80","roundType,6,\u0027ba\u0027"],"1":["mp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,100"]},"buffSkillSDCondition":{"0":["sp,2,70","roundType,6,\u0027ba\u0027"],"1":["sp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,500"]},"buffSkillAFCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"buffSkillReCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"sleepRatio":0,"magnetRatio":0,"debuffSkillAllWeak":true,"weakRatio":1,"debuffSkillallweakCondition":{"0":["roundNow,5,95","roundAll,5,95","roundType,5,\u0027ar\u0027"],"1":["roundNow,5,100","roundAll,5,100","roundType,5,\u0027ar\u0027"],"2":["sp,4,41","roundType,5,\u0027gr\u0027"],"3":["sp,4,51","roundType,5,\u0027gr\u0027","roundNow,3,600"]},"silenceRatio":0,"debuffSkillAllIm":true,"impRatio":1,"debuffSkill":{"Si":true},"debuffSkillSiCondition":{"0":["roundNow,5,100","roundType,5,\u0027ar\u0027"]},"scrollFirst":true,"scroll":{"Pr":true,"Sw":true,"Li":true,"Sh":true},"scrollPrCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollSwCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollLiCondition":{"0":["sp,2,50"],"1":["_buffTurn_sparklife,5,0","_isCd_11395,5,1","_isCd_313,5,1","_isCd_11195,5,1"]},"scrollShCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,630"]},"presetSelector":"","dbBackupListLast":"","themeSelector":"white","delayReload":true,"pauseButton":true,"itemOrder":["SP","LE","SE","MP","ME","Cure","FC","HP","HE"],"channelSkillOrder":["AF","Re"],"buffSkillOrder":["Re","AF"],"debuffSkillOrder":["Si"]}')
       },
       config2: {
@@ -335,7 +336,7 @@ const AAD = {
       config3: {
         name: '元素省蓝AR',
         description: '可用于AR ,40锻造可用于 GF',
-        config: JSON.parse('{"channelSkillSwitch":true,"buffSkillSwitch":true,"debuffSkillSwitch":true,"scrollSwitch":true,"dataRecordSwitch":true,"middleSkillCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,1,4","mp,1,70"],"1":["roundType,5,\\"gr\\"","monsterAlive,1,2"]},"highSkillCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,1,4","mp,1,70"],"1":["roundType,5,\\"gr\\"","monsterAlive,5,monsterAll"]},"turnOnSS":true,"turnOnSSCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,2,3","sp,1,70","oc,1,220"]},"etherTap":true,"etherTapCondition":{"0":["roundType,5,\\"ar\\"","monsterAlive,2,4","mp,2,95","sp,1,60"],"1":["roundType,5,\\"ar\\"","monsterAlive,5,1","mp,2,95"]},"autoquit":true,"autoshard":true,"autoshardlist":"FC","repair":true,"repairValue":65,"autobuy":true,"autobuylist":"SC,SW,EC,MP,SP,HP","item":{"Cure":true,"FC":true,"HP":true,"HE":true,"MP":true,"ME":true,"SP":true,"SE":true,"LE":true,"HealthGem":true,"ManaGem":true,"SpiritGem":true,"MysticGem":true},"itemCureCondition":{"0":["hp,4,45","roundType,6,\\"gr\\""],"1":["hp,4,50","hp,3,23"],"2":["hp,4,53","_isCd_313,5,1","_isCd_11195,5,1"],"3":["hp,4,53","_isCd_313,5,1","roundNow,3,700"],"4":["hp,4,55","hp,3,23","sp,4,45"]},"itemFCCondition":{"0":["hp,4,21"],"2":["_buffTurn_sparklife,5,0"]},"itemHPCondition":{"0":["hp,4,35","roundType,6,\\"gr\\""],"1":["hp,4,35","hp,3,23"],"2":["hp,4,33","_isCd_313,5,1"]},"itemHECondition":{"0":["hp,4,21","roundType,6,\\"gr\\""],"1":["_buffTurn_sparklife,5,0","hp,2,51","_isCd_313,5,1"],"2":["hp,4,1"]},"itemMPCondition":{"0":["mp,4,38"]},"itemMECondition":{"0":["mp,4,12"],"1":["mp,4,30","_buffTurn_sparklife,5,0"]},"itemSPCondition":{"0":["sp,4,55","roundType,6,\\"ar\\""],"1":["_buffTurn_sparklife,5,0","_isCd_11195,5,1","_isCd_313,5,1"],"2":["sp,4,45","roundType,5,\\"ar\\""]},"itemSECondition":{"0":["sp,4,31","_buffTurn_sparklife_scroll,5,0","roundNow,4,800"],"1":["sp,4,16","_buffTurn_sparklife_scroll,6,0"],"2":["sp,4,31","_buffTurn_sparklife_scroll,5,0","_isCd_13221,5,1"]},"itemLECondition":{"0":["sp,4,31","_buffTurn_sparklife_scroll,5,0","roundNow,4,800"],"1":["sp,4,16","_buffTurn_sparklife_scroll,6,0"],"2":["sp,4,31","_buffTurn_sparklife_scroll,5,0","_isCd_13221,5,1"]},"itemHealthGemCondition":{"0":["hp,2,85"]},"itemManaGemCondition":{"0":["mp,2,90"]},"channelSkill":{"AF":true,"Re":true},"channelSkillAFCondition":{"0":["_buffTurn_arcanemeditation,4,110"]},"channelSkillReCondition":{"0":["_buffTurn_regen,4,90"]},"buffSkill":{"HD":true,"MD":true,"SD":true,"AF":true,"Re":true},"buffSkillHDCondition":{"0":["hp,2,80","roundType,6,\\"ba\\""],"1":["hp,2,90","roundType,5,\\"gr\\"","roundNow,3,100"]},"buffSkillMDCondition":{"0":["mp,2,60","roundType,6,\\"ba\\""],"1":["mp,2,90","roundType,5,\\"gr\\"","roundNow,3,100"],"2":["hp,2,80",".roundType,5,\\"rb\\""]},"buffSkillSDCondition":{"0":["sp,2,65","roundType,6,\\"ba\\""],"1":["sp,2,90","roundType,5,\\"gr\\"","roundNow,3,500"],"2":["sp,2,70","roundAll,5,95"]},"buffSkillAFCondition":{"0":["roundType,6,\\"ba\\""]},"buffSkillReCondition":{"0":["roundType,6,\\"ba\\""]},"debuffSkillAllWeak":true,"weakRatio":1,"debuffSkillallweakCondition":{"0":["roundType,5,\\"ar\\"","roundAll,5,95","roundNow,5,95"],"1":["roundType,5,\\"ar\\"","roundAll,5,100","roundNow,5,100"]},"debuffSkillAllSi":true,"silenceRatio":0.76,"debuffSkillallsilenceCondition":{"0":["roundType,5,\\"ar\\"","roundAll,5,100","roundNow,5,100"]},"debuffSkillAllIm":true,"impRatio":1,"scrollFirst":true,"scroll":{"Go":false,"Av":false,"Pr":true,"Sw":true,"Li":true,"Sh":true,"Ab":false},"scrollPrCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"scrollSwCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"scrollLiCondition":{"0":["roundType,5,\\"gr\\"","sp,2,50"],"1":["roundType,5,\\"gr\\"","_buffTurn_sparklife,5,0","_isCd_313,5,1","_isCd_11195,5,1","_isCd_11395,5,1"]},"scrollShCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"pauseButton":true,"pauseHotkey":true,"itemOrder":["MP","SP","ME","Cure","FC","HP","HE","LE","SE"],"channelSkillOrder":["AF","Re"],"buffSkillOrder":["Re","AF"]}')
+        config: JSON.parse('{"channelSkillSwitch":true,"buffSkillSwitch":true,"debuffSkillSwitch":true,"scrollSwitch":true,"dataRecordSwitch":true,"middleSkillCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,1,4","mp,1,70"],"1":["roundType,5,\\"gr\\"","monsterAlive,1,2"]},"highSkillCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,1,4","mp,1,70"],"1":["roundType,5,\\"gr\\"","monsterAlive,5,monsterAll"]},"turnOnSS":true,"turnOnSSCondition":{"0":["roundType,6,\\"gr\\"","monsterAlive,2,3","sp,1,70","oc,1,220"]},"etherTap":true,"etherTapCondition":{"0":["roundType,5,\\"ar\\"","monsterAlive,2,4","mp,2,95","sp,1,60"],"1":["roundType,5,\\"ar\\"","monsterAlive,5,1","mp,2,95"]},"autoquit":true,"autoshard":true,"autoshardlist":"FC","repair":true,"repairValue":65,"autobuy":true,"autobuylist":"SC,SW,EC,MP,SP,HP","item":{"Cure":true,"FC":true,"HP":true,"HE":true,"MP":true,"ME":true,"SP":true,"SE":true,"LE":true,"HealthGem":true,"ManaGem":true,"SpiritGem":true,"MysticGem":true},"itemCureCondition":{"0":["hp,4,35","roundType,6,\u0027gr\u0027"],"1":["hp,4,45","hp,3,23","roundType,5,\u0027gr\u0027"],"2":["hp,4,48","_isCd_313,5,1","_isCd_11195,5,1"],"3":["hp,4,48","_isCd_313,5,1","roundNow,3,700"],"4":["hp,4,55","hp,3,23","sp,4,45"]},"itemFCCondition":{"0":["hp,4,21"],"2":["_buffTurn_sparklife,5,0"]},"itemHPCondition":{"0":["hp,4,35","roundType,6,\\"gr\\""],"1":["hp,4,35","hp,3,23"],"2":["hp,4,33","_isCd_313,5,1"]},"itemHECondition":{"0":["hp,4,21","roundType,6,\\"gr\\""],"1":["_buffTurn_sparklife,5,0","hp,2,51","_isCd_313,5,1"],"2":["hp,4,1"]},"itemMPCondition":{"0":["mp,4,38"]},"itemMECondition":{"0":["mp,4,12"],"1":["mp,4,30","_buffTurn_sparklife,5,0"]},"itemSPCondition":{"0":["sp,4,55","roundType,6,\\"ar\\""],"1":["_buffTurn_sparklife,5,0","_isCd_11195,5,1","_isCd_313,5,1"],"2":["sp,4,45","roundType,5,\\"ar\\""]},"itemSECondition":{"0":["sp,4,31","_buffTurn_sparklife_scroll,5,0","roundNow,4,800"],"1":["sp,4,16","_buffTurn_sparklife_scroll,6,0"],"2":["sp,4,31","_buffTurn_sparklife_scroll,5,0","_isCd_13221,5,1"]},"itemLECondition":{"0":["sp,4,31","_buffTurn_sparklife_scroll,5,0","roundNow,4,800"],"1":["sp,4,16","_buffTurn_sparklife_scroll,6,0"],"2":["sp,4,31","_buffTurn_sparklife_scroll,5,0","_isCd_13221,5,1"]},"itemHealthGemCondition":{"0":["hp,2,85"]},"itemManaGemCondition":{"0":["mp,2,90"]},"channelSkill":{"AF":true,"Re":true},"channelSkillAFCondition":{"0":["_buffTurn_arcanemeditation,4,110"]},"channelSkillReCondition":{"0":["_buffTurn_regen,4,90"]},"buffSkill":{"HD":true,"MD":true,"SD":true,"AF":true,"Re":true},"buffSkillHDCondition":{"0":["hp,2,80","roundType,6,\\"ba\\""],"1":["hp,2,90","roundType,5,\\"gr\\"","roundNow,3,100"]},"buffSkillMDCondition":{"0":["mp,2,60","roundType,6,\\"ba\\""],"1":["mp,2,90","roundType,5,\\"gr\\"","roundNow,3,100"],"2":["hp,2,80",".roundType,5,\\"rb\\""]},"buffSkillSDCondition":{"0":["sp,2,65","roundType,6,\\"ba\\""],"1":["sp,2,90","roundType,5,\\"gr\\"","roundNow,3,500"],"2":["sp,2,70","roundAll,5,95"]},"buffSkillAFCondition":{"0":["roundType,6,\\"ba\\""]},"buffSkillReCondition":{"0":["roundType,6,\\"ba\\""]},"debuffSkillAllWeak":true,"weakRatio":1,"debuffSkillallweakCondition":{"0":["roundNow,5,95","roundAll,5,95","roundType,5,\u0027ar\u0027"],"1":["roundNow,5,100","roundAll,5,100","roundType,5,\u0027ar\u0027"],"2":["sp,4,41","roundType,5,\u0027gr\u0027"],"3":["sp,4,51","roundType,5,\u0027gr\u0027","roundNow,3,600"]},"debuffSkillAllSi":true,"silenceRatio":0.76,"debuffSkillallsilenceCondition":{"0":["roundType,5,\\"ar\\"","roundAll,5,100","roundNow,5,100"]},"debuffSkillAllIm":true,"impRatio":1,"scrollFirst":true,"scroll":{"Go":false,"Av":false,"Pr":true,"Sw":true,"Li":true,"Sh":true,"Ab":false},"scrollPrCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"scrollSwCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"scrollLiCondition":{"0":["roundType,5,\\"gr\\"","sp,2,50"],"1":["roundType,5,\\"gr\\"","_buffTurn_sparklife,5,0","_isCd_313,5,1","_isCd_11195,5,1","_isCd_11395,5,1"]},"scrollShCondition":{"1":["roundType,5,\\"gr\\"","roundNow,1,270"]},"pauseButton":true,"pauseHotkey":true,"itemOrder":["SP","LE","SE","MP","ME","Cure","FC","HP","HE"],"channelSkillOrder":["AF","Re"],"buffSkillOrder":["Re","AF"]}')
       }
       },
 
@@ -821,7 +822,6 @@ const AAD = {
             drops: battleData.drops,
             items: battleData.combat.items || {},
             magic: battleData.combat.magic || {},
-            restore: battleData.combat.restore || {},
             proficiency: battleData.combat.proficiency || {},
             resist: battleData.combat.resist || {},
             defeatLog: battleData.combat.stats?.defeatLog || null
@@ -2058,17 +2058,9 @@ const AAD = {
 
             if (option.channelSkill[skillKey] &&
                 AAD.Utils.Condition.evaluateConditionGroups(condition)) {
-
-              if (skillKey === 'T3') {
-                if (this.Skills.channelattack()) {
-                  AAD.Core.State.set('end', true);
-                  AAD.Utils.Common.showStatus('Channel技能: 使用了M-T3攻击');
-                  return;
-                } else {
-                  continue;
-                }
-              } else if (CAST_SUPPORT[skillKey] && AAD.Utils.DOM.isOn(CAST_SUPPORT[skillKey].id)) {
-                AAD.Utils.DOM.gE(CAST_SUPPORT[skillKey].id).click();
+              const skill = CAST_SUPPORT[skillKey];
+              if (skill && AAD.Utils.DOM.isOn(skill.id)) {
+                AAD.Utils.DOM.gE(skill.id).click();
                 AAD.Core.State.set('end', true);
                 return;
               }
@@ -2473,21 +2465,6 @@ const AAD = {
 
       // 战斗技能模块
       Skills: {
-
-        // 引导攻击
-        channelattack() {
-          const attackStatus = AAD.Core.State.get('attackStatus');
-          const t3SkillId = '1' + attackStatus + '3';
-
-          if (AAD.Utils.DOM.isOn(t3SkillId)) {
-            AAD.Utils.DOM.gE(t3SkillId).click();
-            // T3攻击 这里使用tmode=3
-            AAD.Logic.Battle.Core.selectAOETarget(3);
-            AAD.Core.State.set('end', true);
-            return true;
-          }
-          return false;
-        },
 
         // 使用Debuff技能
         useDeSkill(buffSnapshot) {
@@ -2957,15 +2934,72 @@ const AAD = {
         },
 
         // AOE目标选择 - 战斗核心逻辑，所有子模块共享
-        selectAOETarget(tmode) {
-          let nextnum = 1;
-          if (tmode === 2) nextnum = 3;
-          if (tmode === 1) nextnum = 2;
-
+        selectAOETarget(tmode, buffSnapshot) {
+          const hasSnapshot = !!buffSnapshot;
           const mon = AAD.Utils.DOM.gE('div.btm1', 'all');
+          const monsterTotal = mon.length;
+          if (monsterTotal === 0) return;
+
+          // 计算AOE选点所需的“向后搜索距离”
+          const getNextNum = (mode) => {
+            if (mode === 1) return 2;
+            if (mode === 2) return 3;
+            return 4;
+          };
+
+          // 计算施法范围
+          const getCastRange = (mode) => {
+            if (mode === 3) return (AAD.Runtime.pageType === 'isekai') ? GAME_MECHANICS.AOE_T3_RANGE_ISEKAI : 10;
+            if (mode === 2) return 7;
+            return 5;
+          };
+
+          const nextnum = getNextNum(tmode);
+          const castRange = getCastRange(tmode);
+          const halfRange = Math.ceil(castRange / 2);
+
+          // 判定指定位置是否可点（存活）
+          const isAlive = (index) => {
+            const node = mon[index];
+            return !!(node && node.hasAttribute('onclick'));
+          };
+
+          // 判定指定位置是否存在回流（coalescemana）
+          const hasCoalesce = (index) => {
+            if (!hasSnapshot) return false;
+            if (!isAlive(index)) return false;
+            const buffs = buffSnapshot.monsters[index]?.buffs;
+            return !!(buffs && Object.prototype.hasOwnProperty.call(buffs, 'coalescemana'));
+          };
+
+          // 在区间内寻找最早出现的回流目标
+          const findFirstCoalesce = (startIndex, endIndex) => {
+            for (let i = startIndex; i <= endIndex; i++) {
+              if (hasCoalesce(i)) return i;
+            }
+            return -1;
+          };
+
+          // 按当前“最优AOE”规则计算施法中心索引
+          const resolveAOECenterIndex = () => {
+            for (let i = 0; i < monsterTotal; i++) {
+              if (!isAlive(i)) continue;
+              let centerIndex = i;
+              if (i <= monsterTotal - nextnum) {
+                for (let ii = i + nextnum; ii > i; ii--) {
+                  if (ii < monsterTotal && isAlive(ii)) {
+                    centerIndex = ii;
+                    break;
+                  }
+                }
+              }
+              return centerIndex;
+            }
+            return -1;
+          };
 
           const yggdrasilOrder = AAD.Core.State.get('yggdrasilOrder', null);
-          if (yggdrasilOrder !== null && yggdrasilOrder >= 0 && yggdrasilOrder < mon.length) {
+          if (yggdrasilOrder !== null && yggdrasilOrder >= 0 && yggdrasilOrder < monsterTotal) {
             const yggdrasilTarget = mon[yggdrasilOrder];
             if (yggdrasilTarget && yggdrasilTarget.hasAttribute('onclick')) {
               yggdrasilTarget.click();
@@ -2973,36 +3007,26 @@ const AAD = {
             }
           }
 
-          // 第一个怪物存活
-          if (mon[0] && mon[0].hasAttribute('onclick')) {
-            mon[0].click();
-            return;
-          }
-
-          // 寻找最优AOE目标
-          let s_target = null;
-          for (let i = 0; i < mon.length; i++) {
-            const monster = mon[i];
-            if (monster.hasAttribute('onclick')) {
-              // 尝试找到后面还有足够怪物的目标
-              if (!s_target && i <= mon.length - nextnum) {
-                for (let ii = i + nextnum; ii > i; ii--) {
-                  if (ii < mon.length && mon[ii].hasAttribute('onclick')) {
-                    s_target = mon[ii];
-                    break;
-                  }
-                }
-              }
-
-              if (s_target) {
-                s_target.click();
-                return;
-              } else {
-                monster.click();
-                return;
-              }
+          if (monsterTotal <= castRange) {
+            const coalesceIndex = findFirstCoalesce(0, monsterTotal - 1);
+            if (coalesceIndex !== -1) {
+              mon[coalesceIndex].click();
+              return;
             }
           }
+
+          const centerIndex = resolveAOECenterIndex();
+          if (centerIndex === -1) return;
+
+          if (centerIndex + 1 <= halfRange) {
+            const coalesceIndex = findFirstCoalesce(0, centerIndex);
+            if (coalesceIndex !== -1) {
+              mon[coalesceIndex].click();
+              return;
+            }
+          }
+
+          mon[centerIndex].click();
         },
 
     
@@ -3029,22 +3053,7 @@ const AAD = {
               }
             }
           } else {
-            if (tmode === 3 && buffSnapshot?.monsters) {
-              const monsterNodes = AAD.Utils.DOM.gE('div.btm1', 'all');
-              const snapshotMonsters = buffSnapshot.monsters;
-              const length = Math.min(monsterNodes.length, snapshotMonsters.length);
-              for (let i = 0; i < length; i++) {
-                const monster = monsterNodes[i];
-                if (!monster || !monster.hasAttribute('onclick')) continue;
-                const buffs = snapshotMonsters[i]?.buffs;
-                if (buffs && Object.prototype.hasOwnProperty.call(buffs, 'coalescemana')) {
-                  monster.click();
-                  AAD.Core.State.set('end', true);
-                  return;
-                }
-              }
-            }
-            this.selectAOETarget(tmode);
+            this.selectAOETarget(tmode, buffSnapshot, true);
           }
 
           AAD.Core.State.set('end', true);
@@ -4500,9 +4509,12 @@ const AAD = {
           resist: {
             debuffResist0: 0,
             debuffResist12: 0,
-            debuffResist3: 0
+            debuffResist3: 0,
+            magicHit: 0,
+            magicCrit: 0,
+            magicResistPartially: 0,
+            magicResist: 0
           },
-          restore: {},
           items: {},
           magic: {},
           proficiency: {}
@@ -4532,15 +4544,37 @@ const AAD = {
         this.timelog = {};
       },
 
+      // 确保抵抗统计结构完整（私有方法）
+      _ensureResist(combat) {
+        if (!combat.resist) {
+          combat.resist = {
+            debuffResist0: 0,
+            debuffResist12: 0,
+            debuffResist3: 0,
+            magicHit: 0,
+            magicCrit: 0,
+            magicResistPartially: 0,
+            magicResist: 0
+          };
+          return combat.resist;
+        }
+
+        const resist = combat.resist;
+        if (resist.debuffResist0 == null) resist.debuffResist0 = 0;
+        if (resist.debuffResist12 == null) resist.debuffResist12 = 0;
+        if (resist.debuffResist3 == null) resist.debuffResist3 = 0;
+        if (resist.magicHit == null) resist.magicHit = 0;
+        if (resist.magicCrit == null) resist.magicCrit = 0;
+        if (resist.magicResistPartially == null) resist.magicResistPartially = 0;
+        if (resist.magicResist == null) resist.magicResist = 0;
+        return resist;
+      },
+
       // 统计Debuff抵抗次数（按施法块）
       _processDebuffResistLog(logEntries, endIndex, combat) {
         if (!logEntries || endIndex <= 0) return;
 
-        const resist = combat.resist || (combat.resist = {
-          debuffResist0: 0,
-          debuffResist12: 0,
-          debuffResist3: 0
-        });
+        const resist = this._ensureResist(combat);
 
         let pendingGain = 0;
         let pendingPartial = 0;
@@ -4585,6 +4619,30 @@ const AAD = {
         }
       },
 
+      // 统计攻击法术的命中/抵抗（单行）
+      _processMagicAttackResistLine(text, resist) {
+        if (!text) return;
+
+        if (text.includes('resists your spell.')) {
+          resist.magicResist += 1;
+          return;
+        }
+
+        if (text.includes('resists, and was')) {
+          resist.magicResistPartially += 1;
+        }
+
+        const hitMatch = text.match(/\b(glanced|hit|crit|eviscerated)\b for \d+ \w+ damage/);
+        if (!hitMatch) return;
+
+        if (hitMatch[1] === 'crit') {
+          resist.magicCrit += 1;
+          return;
+        }
+
+        resist.magicHit += 1;
+      },
+
       // 处理动作相关的日志
       processActionLog(text, combat, actionParm) {
         let reg, magic, point;
@@ -4593,15 +4651,6 @@ const AAD = {
         if (text.match(/You gain the effect Cloak of the Fallen/)) {
           combat.stats.sparkCount = (combat.stats.sparkCount || 0) + 1;
           console.log('[火花] 触发，总计: ' + combat.stats.sparkCount);
-        }else if (text.match(/^Recovered \d+ points of/) || text.match(/You are healed for \d+ Health Points/) || text.match(/You drain \d+ HP from/)) {
-          magic = (actionParm.mode === 'defend') ? 'defend' : text.match(/You drain \d+ HP from/) ? 'drain' : actionParm.magic || actionParm.item;
-          point = text.match(/\d+/)[0] * 1;
-          combat.restore[magic] = (magic in combat.restore) ? combat.restore[magic] + point : point;
-        } else if (text.match(/(restores|drain) \d+ points of/)) {
-          reg = text.match(/^(.*) restores (\d+) points of (\w+)/) || text.match(/^You (drain) (\d+) points of (\w+)/);
-          magic = reg[1];
-          point = reg[2] * 1;
-          combat.restore[magic] = (magic in combat.restore) ? combat.restore[magic] + point : point;
         } else if (text.match(/You gain .* proficiency/)) {
           reg = text.match(/You gain ([\d.]+) points of (.*?) proficiency/);
           magic = reg[2];
@@ -4633,6 +4682,8 @@ const AAD = {
           if (actionParm) {
             // 更新战斗统计
             const monsterAlive = AAD.Core.State.get('monsterAlive', 0);
+            const isAttackMagic = actionParm.mode === 'magic' && SPELL_LISTS.ATTACK.includes(actionParm.magic);
+            const resist = isAttackMagic ? this._ensureResist(combat) : null;
 
             if (monsterAlive === 0) {
               combat.stats.totalRounds += 1;
@@ -4658,6 +4709,9 @@ const AAD = {
                 }
                 const text = actionParm.log[i].textContent;
                 this.processActionLog(text, combat, actionParm);
+                if (isAttackMagic) {
+                  this._processMagicAttackResistLine(text, resist);
+                }
               }
               this._processDebuffResistLog(actionParm.log, endIndex, combat);
             }
@@ -4719,8 +4773,11 @@ const AAD = {
       },
 
       extractAllCombatData(combatData, totalUsageData) {
-        // 提取回复数据
-        this.extractCombatData(combatData.restore, totalUsageData, 'restore', []);
+        // 提取熟练度统计
+        this.extractCombatData(combatData.proficiency, totalUsageData, 'proficiency', []);
+
+        // 提取抵抗统计
+        this.extractCombatData(combatData.resist, totalUsageData, 'resist', []);
 
         // 提取技能和物品使用数据
         if (combatData.items) {
@@ -4814,7 +4871,8 @@ const AAD = {
           _usageData: {
             items: flatData.detailsCompressed.items,
             magic: flatData.detailsCompressed.magic,
-            restore: flatData.detailsCompressed.restore
+            proficiency: flatData.detailsCompressed.proficiency || {},
+            resist: flatData.detailsCompressed.resist
           },
           _defeatLog: flatData.detailsCompressed.defeatLog
         };
@@ -4916,7 +4974,7 @@ const AAD = {
             attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
             horse: 0, spark: 0, battleCount: 0, seconds: 0,
             _dropData: {},
-            _usageData: { items: {}, magic: {}, restore: {} }
+            _usageData: { items: {}, magic: {}, proficiency: {}, resist: {} }
           };
         }
         return dailyData[dateStr];
@@ -5205,7 +5263,7 @@ const AAD = {
             averageRow: { timestamp: 'Average', battle_type: 'Average' },
             totalRow: { timestamp: 'Total', battle_type: 'Total' },
             totalDropData: {},
-            totalUsageData: { items: {}, magic: {}, restore: {} },
+            totalUsageData: { items: {}, magic: {}, proficiency: {}, resist: {} },
             totalDurationSeconds: 0,
             totalTurns: 0,
             validBattles: 0
@@ -5663,12 +5721,10 @@ const AAD = {
           <div><input id="focus" type="checkbox"><label for="focus"><b>Focus</b></label> <div class="customize" name="focusCondition"></div></div>
           <div><input id="etherTap" type="checkbox"><label for="etherTap"><b>Ether Tap</b></label> <div class="customize" name="etherTapCondition"></div></div>
           <div><b>攻击规则</b><br>
-            <span class="dbTipText">每回合计算敌人当前血量，血量最低的设置初始血量为10，其他敌人为当前血量倍数*10<br>
-            初始权重与下述各Buff权重相加</span><br>
-            <span class="dbTipText">Sleep <input class="dbNumber" name="weight_Sle" placeholder="0" type="text"> Blind <input class="dbNumber" name="weight_Bl" placeholder="0" type="text"> Slow <input class="dbNumber" name="weight_Slo" placeholder="0" type="text"> Imperil <input class="dbNumber" name="weight_Im" placeholder="0" type="text"></span><br>
-            <span class="dbTipText">MagNet <input class="dbNumber" name="weight_MN" placeholder="0" type="text"> Silence <input class="dbNumber" name="weight_Si" placeholder="0" type="text"> Drain <input class="dbNumber" name="weight_Dr" placeholder="0" type="text"> Weaken <input class="dbNumber" name="weight_We" placeholder="0" type="text"></span><br>
-            <span class="dbTipText">Confuse <input class="dbNumber" name="weight_Co" placeholder="0" type="text"> Coalesced Mana <input class="dbNumber" name="weight_CM" placeholder="0" type="text"></span><br>
-            <span class="dbTipText">Stunned <input class="dbNumber" name="weight_Stun" placeholder="0" type="text"> Penetrated Armor <input class="dbNumber" name="weight_PA" placeholder="0" type="text"> Bleeding Wound <input class="dbNumber" name="weight_BW" placeholder="0" type="text"></span></div>
+            <span class="dbTipText">每回合按当前血量计算基础权重：最低血量的敌人为 10，其它敌人按 当前血量 / 最低血量 × 10 计算。基础权重会与下方各状态权重相加。</span><br>
+            <span class="dbTipText">Weaken <input class="dbNumber" name="weight_We" placeholder="0" type="text"> Imperil <input class="dbNumber" name="weight_Im" placeholder="0" type="text"> Sleep <input class="dbNumber" name="weight_Sle" placeholder="0" type="text"> Silence <input class="dbNumber" name="weight_Si" placeholder="0" type="text"> MagNet <input class="dbNumber" name="weight_MN" placeholder="0" type="text"></span><br>
+            <span class="dbTipText">Stunned <input class="dbNumber" name="weight_Stun" placeholder="0" type="text"> Confuse <input class="dbNumber" name="weight_Co" placeholder="0" type="text"> Drain <input class="dbNumber" name="weight_Dr" placeholder="0" type="text"> Slow <input class="dbNumber" name="weight_Slo" placeholder="0" type="text"> Blind <input class="dbNumber" name="weight_Bl" placeholder="0" type="text"></span><br>
+            <span class="dbTipText">Coalesced Mana <input class="dbNumber" name="weight_CM" placeholder="0" type="text"> Penetrated Armor <input class="dbNumber" name="weight_PA" placeholder="0" type="text"> Bleeding Wound <input class="dbNumber" name="weight_BW" placeholder="0" type="text"></span></div>
           <div><input id="ruleReverse" type="checkbox"><label for="ruleReverse">勾选攻击权重最最大，不勾选攻击权重最小</label></div>
           <div><input id="ruleOrder" type="checkbox"><label for="ruleOrder">塔内顺序攻击</label></div>
           <div><input id="ruleOrderGlobal" type="checkbox"><label for="ruleOrderGlobal">全局顺序攻击</label></div>
@@ -5740,7 +5796,7 @@ const AAD = {
           <div class="channelSkillOrder"><span class="dbTipText">施放顺序</span>
             <input class="dbInputWide" name="channelSkillOrder" type="text" disabled><br>
             <input id="channelSkillOrder_Pr" type="checkbox"><label for="channelSkillOrder_Pr">Protection</label><input id="channelSkillOrder_SL" type="checkbox"><label for="channelSkillOrder_SL">Spark of Life</label><input id="channelSkillOrder_SS" type="checkbox"><label for="channelSkillOrder_SS">Spirit Shield</label><input id="channelSkillOrder_Ha" type="checkbox"><label for="channelSkillOrder_Ha">Haste</label><input id="channelSkillOrder_AF" type="checkbox"><label for="channelSkillOrder_AF">Arcane Focus</label><input id="channelSkillOrder_He" type="checkbox"><label for="channelSkillOrder_He">Heartseeker</label><br>
-            <input id="channelSkillOrder_Re" type="checkbox"><label for="channelSkillOrder_Re">Regen</label><input id="channelSkillOrder_SV" type="checkbox"><label for="channelSkillOrder_SV">Shadow Veil</label><input id="channelSkillOrder_Ab" type="checkbox"><label for="channelSkillOrder_Ab">Absorb</label><input id="channelSkillOrder_T3" type="checkbox"><label for="channelSkillOrder_T3">M-T3 </label></div>
+            <input id="channelSkillOrder_Re" type="checkbox"><label for="channelSkillOrder_Re">Regen</label><input id="channelSkillOrder_SV" type="checkbox"><label for="channelSkillOrder_SV">Shadow Veil</label><input id="channelSkillOrder_Ab" type="checkbox"><label for="channelSkillOrder_Ab">Absorb</label></div>
           <div><input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><b>Protection</b></label> <div class="customize" name="channelSkillPrCondition"></div></div>
           <div><input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><b>Spark of Life</b></label> <div class="customize" name="channelSkillSLCondition"></div></div>
           <div><input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><b>Spirit Shield</b></label> <div class="customize" name="channelSkillSSCondition"></div></div>
@@ -5750,7 +5806,6 @@ const AAD = {
           <div><input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><b>Regen</b></label> <div class="customize" name="channelSkillReCondition"></div></div>
           <div><input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><b>Shadow Veil</b></label> <div class="customize" name="channelSkillSVCondition"></div></div>
           <div><input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><b>Absorb</b></label> <div class="customize" name="channelSkillAbCondition"></div></div>
-          <div><input id="channelSkill_T3" type="checkbox"><label for="channelSkill_T3"><b>M-T3</b></label> <div class="customize" name="channelSkillT3Condition"></div></div>
         `;
       },
 
@@ -5871,6 +5926,8 @@ const AAD = {
                     <div style="margin-bottom:12px;"><b>功能选项</b></div>
                     <div style="display:flex;flex-direction:column;gap:8px;">
                       <div><input id="defeatLogSwitch" type="checkbox"><label for="defeatLogSwitch">战败日志</label></div>
+                      <div><input id="resistTooltipSwitch" type="checkbox"><label for="resistTooltipSwitch">抵抗统计</label></div>
+                      <div><input id="proficiencyTooltipSwitch" type="checkbox"><label for="proficiencyTooltipSwitch">熟练度显示</label></div>
                     </div>
                   </div>
                   <div style="border:1px solid #dee2e6;background-color:var(--aad-bg-white);padding:16px;border-radius:6px;">
@@ -5919,7 +5976,7 @@ const AAD = {
             <select id="themeSelector" class="dbNumber" name="themeSelector">
               <option value="white">天水碧</option>
               <option value="popBrutal">奶油波普</option>
-              <option value="night">夜间主题</option>
+              <option value="night">夜间</option>
             </select>
             <button id="applyTheme">应用配色</button>
           </div>
@@ -7028,6 +7085,8 @@ const AAD = {
         const columns = AAD.UI.ColumnSettings.getEnabledColumns();
         const option = AAD.Core.Storage.getValue('option') || {};
         this.defeatLogTooltipEnabled = !!option.defeatLogSwitch;
+        this.resistTooltipEnabled = !!option.resistTooltipSwitch;
+        this.proficiencyTooltipEnabled = !!option.proficiencyTooltipSwitch;
 
         // 检查是否有启用的列
         const enabledGroups = Object.keys(columns);
@@ -7161,6 +7220,9 @@ const AAD = {
         const displayValue = hasDefeatLog ? `<span class="dbDefeatLogHint">${value}</span>` : value;
         if (column.tooltip) {
           if (column.tooltip === 'defeat_log' && !hasDefeatLog) {
+            return `<td class="${finalClass}">${displayValue}</td>`;
+          }
+          if (column.tooltip === 'exp_details' && !this.proficiencyTooltipEnabled) {
             return `<td class="${finalClass}">${displayValue}</td>`;
           }
           const rowId = context === 'data' ? (row.id || row.timestamp || ('row_' + Math.random())) : context;
@@ -7298,6 +7360,17 @@ const AAD = {
         }
 
         switch (column.tooltip) {
+          case 'exp_details':
+            if (combatData.proficiency) {
+              Object.keys(combatData.proficiency).forEach((name) => {
+                const value = combatData.proficiency[name];
+                if (value) {
+                  const rounded = Math.round(value * 1000) / 1000;
+                  content.push(name + ': ' + rounded);
+                }
+              });
+            }
+            break;
 
           case 'legendary_details': {
             const equipData = dropData.Equips && dropData.Equips.Legendary;
@@ -7347,6 +7420,17 @@ const AAD = {
             if (combatData.magic) {
               content.push(...ItemStatsUtil.getItemDetails(combatData, SPELL_LISTS.ATTACK, 'magic'));
             }
+            if (this.resistTooltipEnabled) {
+              const resistData = combatData.resist || {};
+              const magicHit = resistData.magicHit || 0;
+              const magicCrit = resistData.magicCrit || 0;
+              const magicResistPartially = resistData.magicResistPartially || 0;
+              const magicResist = resistData.magicResist || 0;
+              if (magicHit) content.push('magicHit: ' + magicHit);
+              if (magicCrit) content.push('magicCrit: ' + magicCrit);
+              if (magicResistPartially) content.push('magicResistPartially: ' + magicResistPartially);
+              if (magicResist) content.push('magicResist: ' + magicResist);
+            }
             break;
 
           case 'support_spell_details':
@@ -7364,6 +7448,15 @@ const AAD = {
           case 'debuff_spell_details':
             if (combatData.magic) {
               content.push(...ItemStatsUtil.getItemDetails(combatData, SPELL_LISTS.DEBUFF, 'magic'));
+            }
+            if (this.resistTooltipEnabled) {
+              const resistData = combatData.resist || {};
+              const resist0 = resistData.debuffResist0 || 0;
+              const resist12 = resistData.debuffResist12 || 0;
+              const resist3 = resistData.debuffResist3 || 0;
+              if (resist0) content.push('debuffResist0: ' + resist0);
+              if (resist12) content.push('debuffResist12: ' + resist12);
+              if (resist3) content.push('debuffResist3: ' + resist3);
             }
             break;
 
@@ -7625,27 +7718,27 @@ const AAD = {
           'input-border': '#111111',
           'input-focus': '#7FCBFF'
         },
-         "night": {
-    "name": "夜间主题",
-    "main-bg": "#161A1F",
-    "accent-color": "#4A6B8A",
-    "border-color": "#3E4A56",
-    "secondary-bg": "#1D2228",
-    "card-bg": "#242A32",
-    "hover-color": "#2D343E",
-    "modal-bg": "#242A32",
-    "modal-header-bg": "#2C3842",
-    "modal-overlay": "rgba(0, 0, 0, 0.6)",
-    "shadow-color": "rgba(0, 0, 0, 0.5)",
-    "text-primary": "#E2E6EB",
-    "text-white": "#FFFFFF",
-    "bg-white": "#FFFFFF",
-    "link-color": "#6BA1E0",
-    "link-hover": "#8BC1FF",
-    "text-heading": "#FFFFFF",
-    "input-border": "#4E5E6E",
-    "input-focus": "#5F9ED9"
-  }
+        night: {
+          name: "夜间",
+          "main-bg": "#0D0F12",
+          "accent-color": "#4A6C8F",
+          "border-color": "#2A313A",
+          "secondary-bg": "#13171D",
+          "card-bg": "#181D24",
+          "hover-color": "#202632",
+          "modal-bg": "#181D24",
+          "modal-header-bg": "#1E262F",
+          "modal-overlay": "rgba(0, 0, 0, 0.7)",
+          "shadow-color": "rgba(0, 0, 0, 0.7)",
+          "text-primary": "#C4CDD6",
+          "text-white": "#F7F9FB",
+          "bg-white": "#12161C",
+          "link-color": "#6F97BF",
+          "link-hover": "#83A9CF",
+          "text-heading": "#E9EDF1",
+          "input-border": "#2D3641",
+          "input-focus": "#5A7FA6"
+        }
       },
 
       // 初始化统一主题系统
@@ -7889,7 +7982,7 @@ const AAD = {
           }
 
           .dbTab > div:hover {
-            border-color: var(--aad-border-color);
+            border-color: var(--aad-accent-color);
           }
 
           /* 表单控件样式 */
@@ -7905,6 +7998,17 @@ const AAD = {
             background-color: var(--aad-main-bg);
             color: var(--aad-text-primary);
             font-size: 13px;
+          }
+
+          .dbTab input[type="number"]:hover,
+          .dbTab input[type="text"]:hover,
+          .dbTab select:hover,
+          .dbTab textarea:hover,
+          .dbTab input[type="number"]:focus,
+          .dbTab input[type="text"]:focus,
+          .dbTab select:focus,
+          .dbTab textarea:focus {
+            background-color: var(--aad-secondary-bg) !important;
           }
 
           .dbTab input[type="number"]:focus,

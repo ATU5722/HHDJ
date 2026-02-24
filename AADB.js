@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.0
+// @version      3.3.2
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,10 +28,10 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 20, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 110, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 10, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 340, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
 
@@ -1806,6 +1806,9 @@ const AAD = {
         AAD.Core.State.set('end', false);
         this.loadMonsterStatus();
 
+        const currentTurn = AAD.Core.State.get('turn', 0);
+        AAD.Core.State.set('turn', currentTurn + 1);
+
         if (AAD.Data.Recorder.combat && AAD.Data.Recorder.combat.stats) {
           AAD.Data.Recorder.combat.stats.totalTurns += 1;
         }
@@ -2425,6 +2428,7 @@ const AAD = {
         ];
 
         // 获取战斗数据
+        const turn = AAD.Core.State.get('turn', 0);
         const totalTurns = AAD.Data.Recorder.combat?.stats?.totalTurns || 0;
         const runSpeed = AAD.Core.State.get('runSpeed', 0);
         const roundNow = AAD.Core.State.get('roundNow', 0);
@@ -2435,11 +2439,11 @@ const AAD = {
 
         // 更新页面战斗信息显示
         if (logElement) {
-          logElement.innerHTML = `Total: ${totalTurns} t<br>Speed: ${runSpeed} t/s<br>Round: ${roundNow}/${roundAll}<br>攻击模式: ${attackStatusNames[attackStatus] || '未知'}<br>敌人: ${monsterAlive}/${monsterAll}`;
+          logElement.innerHTML = `Turns: ${turn}<br>Total: ${totalTurns} t<br>Speed: ${runSpeed} t/s<br>Round: ${roundNow}/${roundAll}<br>攻击模式: ${attackStatusNames[attackStatus] || '未知'}<br>敌人: ${monsterAlive}/${monsterAll}`;
         }
 
         // 更新页面标题
-        document.title = `${totalTurns}||${runSpeed}||${roundNow}/${roundAll}||${monsterAlive}/${monsterAll}`;
+        document.title = `${turn}||${runSpeed}||${roundNow}/${roundAll}||${monsterAlive}/${monsterAll}`;
         this.countMonsterHP();
       },
 
@@ -2534,6 +2538,8 @@ const AAD = {
 
       // 新回合初始化
       newRound() {
+        AAD.Core.State.set('turn', 0);
+
         if (window.location.hash !== '') {
           AAD.Runtime.refreshPage();
           return;
@@ -3270,6 +3276,16 @@ const AAD = {
 
     // 竞技场模块
     Arena: {
+      ensureDailyReset() {
+        const option = AAD.Core.Storage.getValue('option') || {};
+        return AAD.Core.DailyReset.ensure(
+          'arena',
+          'world',
+          () => !!option.idleArena,
+          (info) => this.resetDailyState(info)
+        );
+      },
+
       // 闲置竞技场主函数 
       async runArena() {
         // 跨世界状态检查
@@ -3279,12 +3295,7 @@ const AAD = {
         }
 
         const option = AAD.Core.Storage.getValue('option') || {};
-        const resetState = AAD.Core.DailyReset.ensure(
-          'arena',
-          'world',
-          () => !!option.idleArena,
-          (info) => this.resetDailyState(info)
-        );
+        const resetState = this.ensureDailyReset();
         if (!resetState) {
           return;
         }
@@ -3904,7 +3915,7 @@ const AAD = {
           }
         }
 
-        const delayMs = 2000 + Math.random() * 3000;
+        const delayMs = 4000 + Math.random() * 5000;
         await new Promise(resolve => setTimeout(resolve, delayMs));
 
         const enterButton = document.getElementById('equipsubmit');
@@ -4345,6 +4356,10 @@ const AAD = {
         // 处理装备修理
         if (option.repair) {
           await this.handleEquipmentRepair(option);
+        }
+
+        if (option.idleArena) {
+          AAD.Logic.Arena.ensureDailyReset();
         }
 
         // 竞技场优先：竞技场未完成时优先执行竞技场
@@ -8224,6 +8239,7 @@ const AAD = {
           '<option value="roundLeft">roundLeft</option>',
           '<option value="roundType">roundType</option>',
           '<option value="attackStatus">attackStatus</option>',
+          '<option value="turn">turn</option>',
           '<option value="">- - - -</option>',
           '<option value="_isCd_">isCd</option>',
           '<option value="_buffTurn_">buffTurn</option>',

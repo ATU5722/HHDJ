@@ -370,7 +370,6 @@
     },
 
     runOnce(ctx) {
-      ensureEnglishUi();
       const actionTaken = this.runStep(ctx);
       if (!actionTaken) {
         const st = ctx.store.read();
@@ -417,7 +416,7 @@
           continue;
         }
 
-        const tier = readTier(ab.card);
+        const tier = readTier(ab.card, task.id);
         if (tier < task.targetTier) {
           if (submitUpgrade(ab.card, task.id)) {
             st.resumeAfter = nextResumeAt();
@@ -511,23 +510,90 @@
     return null;
   }
 
-  function readTier(card) {
-    const bars = card.querySelectorAll(".hvut-ab-bar");
-    let tier = 0;
-    for (const b of bars) {
-      const s = (b.getAttribute("style") || "").toLowerCase();
-      if (!s.includes("x.png")) tier += 1;
+  function readTier(card, abilityId) {
+    const hvutBars = card.querySelectorAll(".hvut-ab-bar");
+    if (hvutBars.length > 0) {
+      let tier = 0;
+      for (const b of hvutBars) {
+        const s = (b.getAttribute("style") || "").toLowerCase();
+        if (!s.includes("x.png")) tier += 1;
+      }
+      return tier;
     }
-    return tier;
+
+    const legacyRow = findLegacyAwRow(card);
+    if (legacyRow) {
+      const dots = legacyRow.querySelectorAll("div");
+      let tier = 0;
+      for (const d of dots) {
+        const s = (d.getAttribute("style") || "").toLowerCase();
+        if (s.includes("f.png")) tier += 1;
+      }
+      return tier;
+    }
+
+    if (abilityId) {
+      const globalRow = document.querySelector(`[onclick*='do_unlock_ability(${abilityId})']`);
+      if (globalRow) {
+        const dots = globalRow.querySelectorAll("div");
+        let tier = 0;
+        for (const d of dots) {
+          const s = (d.getAttribute("style") || "").toLowerCase();
+          if (s.includes("f.png")) tier += 1;
+        }
+        return tier;
+      }
+    }
+
+    return 0;
   }
 
   function highestUnlockButton(card, abilityId) {
+    const abilityName = getAbilityNameById(abilityId) || getAbilityName(card);
+
+    const global = Array.from(document.querySelectorAll("[data-action='unlock']"));
+    if (abilityName && global.length > 0) {
+      const byName = global.filter((x) => (x.getAttribute("data-name") || "") === abilityName);
+      if (byName.length > 0) return pickHighest(byName);
+    }
+
     const inCard = Array.from(card.querySelectorAll("[data-action='unlock']"));
     if (inCard.length > 0) return pickHighest(inCard);
-    const global = Array.from(document.querySelectorAll("[data-action='unlock']"));
+
     const byId = global.filter((x) => Number(x.getAttribute("data-id") || "0") === Number(abilityId));
     if (byId.length > 0) return pickHighest(byId);
+
+    const byAbilityInCard = card.querySelector(`[onclick*='do_unlock_ability(${abilityId})']`) || findLegacyAwRow(card);
+    if (byAbilityInCard) return byAbilityInCard;
+
+    const byAbilityGlobal = document.querySelector(`[onclick*='do_unlock_ability(${abilityId})']`);
+    if (byAbilityGlobal) return byAbilityGlobal;
+
+    const legacyButton = card.querySelector("[class^='aw'][onclick*='do_unlock_ability']");
+    if (legacyButton) return legacyButton;
+
     return null;
+  }
+
+  function findLegacyAwRow(card) {
+    const nodes = card.querySelectorAll("div");
+    for (const node of nodes) {
+      const cls = node.className || "";
+      if (/\baw\d+\b/.test(cls)) return node;
+    }
+    return null;
+  }
+
+  function getAbilityName(card) {
+    return (card.querySelector(".fc2 > div")?.textContent || "").trim();
+  }
+
+  function getAbilityNameById(abilityId) {
+    const icon = document.getElementById(`slot_${abilityId}`);
+    if (!icon) return "";
+    const text = icon.getAttribute("onmouseover") || "";
+    const m = text.match(/overability\([^,]+,\s*'([^']+)'/);
+    return m ? m[1] : "";
   }
 
   function pickHighest(buttons) {

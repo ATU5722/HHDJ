@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.2
+// @version      3.3.5
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,8 +28,8 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 25, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 30, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 150, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
   ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
@@ -362,10 +362,25 @@ const AAD = {
         'idleArenaTime',
         'idleArenaOrder',
         'idleArenaGrTime',
+        'personaConfigSwitch',
+        'arPersona',
+        'arEquip',
+        'arConfig',
+        'gfPersona',
+        'gfEquip',
+        'gfConfig',
+        'twPersona',
+        'twEquip',
+        'twConfig',
         'crossWorldArena',
         'encounter',
         'encounterDailyMin',
-        'encounterDailyMax'
+        'encounterDailyMax',
+        'dataRecordSwitch',
+        'dataColumns',
+        'defeatLogSwitch',
+        'resistTooltipSwitch',
+        'proficiencyTooltipSwitch'
       ],
 
       stripExcludedConfig(config) {
@@ -453,7 +468,7 @@ const AAD = {
       ISOLATED_KEYS: new Set([
         'option', 'backup', 'roundType', 'roundNow', 'roundAll',
         'monsterStatus', 'arena', 'dailyReset_arena', 'disabled', 'missanswer',
-        'prices', 'page_temp_data', 'iwState'
+        'prices', 'page_temp_data', 'iwState', 'arenaAutoStart'
       ]),
 
       // 世界隔离键映射
@@ -1262,7 +1277,7 @@ const AAD = {
         }
 
         const delay = state.hasReset ?
-          60 * 60 * 1000 :
+          30 * 60 * 1000 :
           Math.max(1000, state.resetTime - now);
 
         this.clearTimer(timerKey);
@@ -3405,6 +3420,21 @@ const AAD = {
           dayKey: info.dayKey
         });
         AAD.Core.Storage.setValue('arena', arena);
+
+        const option = AAD.Core.Storage.getValue('option') || {};
+        if (!option.idleArena) {
+          return;
+        }
+
+        const marker = AAD.Core.Storage.getValue('arenaAutoStart');
+        if (marker && marker.dayKey === info.dayKey) {
+          return;
+        }
+
+        AAD.Core.Storage.setValue('arenaAutoStart', {
+          dayKey: info.dayKey
+        });
+        setTimeout(() => AAD.Runtime.refreshPage(), 2000);
       },
 
       // 重置跨世界循环
@@ -4300,6 +4330,14 @@ const AAD = {
 
         // 启动遭遇战检查
         const option = AAD.Core.Storage.getValue('option') || {};
+        const todayKey = AAD.Utils.Time.getUtcDayKey();
+        const arenaAutoStart = AAD.Core.Storage.getValue('arenaAutoStart');
+        if (arenaAutoStart) {
+          if (arenaAutoStart.dayKey !== todayKey) {
+            AAD.Core.Storage.delValue('arenaAutoStart');
+          }
+        }
+
         if (option.encounter) {
           AAD.Logic.Encounter.runEncounter();
         }
@@ -4364,7 +4402,6 @@ const AAD = {
 
         // 竞技场优先：竞技场未完成时优先执行竞技场
         const arenaState = AAD.Core.Storage.getValue('arena');
-        const todayKey = AAD.Utils.Time.getUtcDayKey();
         const arenaCompleted = !!(arenaState &&
                                   arenaState.dayKey === todayKey &&
                                   arenaState.isOk &&
@@ -7429,10 +7466,10 @@ const AAD = {
 
         if (!selectedCode) return;
 
-        const backups = AAD.Core.Storage.getValue('backup') || {};
-        const backupConfig = backups[selectedCode];
-        const mergedConfig = AAD.Core.Config.mergeConfigWithExclusions(backupConfig);
-        this.loadConfigToPanel(panel, mergedConfig);
+        const restored = AAD.Core.Config.restoreConfig(selectedCode);
+        if (!restored) {
+          alert('加载备份失败：未找到对应配置');
+        }
       },
 
       exportConfig(panel) {
@@ -7448,7 +7485,7 @@ const AAD = {
         if (!textArea || !textArea.value) return;
         const configData = JSON.parse(textArea.value);
         const mergedConfig = AAD.Core.Config.mergeConfigWithExclusions(configData);
-        this.loadConfigToPanel(panel, mergedConfig);
+        AAD.Core.Config.applyConfig(mergedConfig);
       },
 
       // 暂停/继续切换 

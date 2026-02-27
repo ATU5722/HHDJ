@@ -293,10 +293,10 @@
       { tree: "general", skills: [{ id: 1101, targetTier: 10, equip: true }, { id: 1102, targetTier: 10, equip: true }, { id: 1103, targetTier: 10, equip: true }, { id: 1104, targetTier: 5, equip: true }, { id: 1105, targetTier: 5, equip: true }, { id: 1106, targetTier: 5, equip: true }] },
       { tree: "onehanded", skills: [{ id: 2101, targetTier: 3, equip: true }, { id: 2102, targetTier: 2, equip: true }, { id: 2103, targetTier: 1, equip: true }] },
       { tree: "heavy", skills: [{ id: 3301, targetTier: 3, equip: true }, { id: 3302, targetTier: 3, equip: true }, { id: 3303, targetTier: 3, equip: true }, { id: 3304, targetTier: 7, equip: true }] },
-      { tree: "deprecating1", skills: [{ id: 4201, targetTier: 5, equip: true }, { id: 4202, targetTier: 3, equip: true }, { id: 4203, targetTier: 5, equip: true }, { id: 4204, targetTier: 3, equip: true }, { id: 4207, targetTier: 3, equip: true }] },
-      { tree: "deprecating2", skills: [{ id: 4211, targetTier: 3, equip: true }] },
       { tree: "supportive1", skills: [{ id: 4102, targetTier: 5, equip: true }, { id: 4103, targetTier: 5, equip: true }, { id: 4105, targetTier: 5, equip: true }, { id: 4106, targetTier: 7, equip: true }, { id: 4108, targetTier: 10, equip: true }, { id: 4109, targetTier: 3, equip: true }] },
-      { tree: "supportive2", skills: [{ id: 4110, targetTier: 3, equip: true }, { id: 4101, targetTier: 5, equip: true }, { id: 4111, targetTier: 5, equip: true, forceSlotId: 301 }] }
+      { tree: "supportive2", skills: [{ id: 4110, targetTier: 3, equip: true }, { id: 4101, targetTier: 5, equip: true }, { id: 4111, targetTier: 5, equip: true, forceSlotId: 301 }] },
+      { tree: "deprecating1", skills: [{ id: 4201, targetTier: 5, equip: true }, { id: 4202, targetTier: 3, equip: true }, { id: 4203, targetTier: 5, equip: true }, { id: 4204, targetTier: 3, equip: true }, { id: 4207, targetTier: 3, equip: true }] },
+      { tree: "deprecating2", skills: [{ id: 4211, targetTier: 3, equip: true }] }
     ],
 
     flattenPlan() {

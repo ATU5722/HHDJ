@@ -464,6 +464,12 @@
           continue;
         }
 
+        if (!locked.costParsed) {
+          st.status[task.key] = "skipped";
+          ctx.store.write(st);
+          continue;
+        }
+
         if (mp >= locked.cost && submitUnlock(locked.id)) {
           st.resumeAfter = nextResumeAt();
           ctx.store.write(st);
@@ -633,9 +639,11 @@
       const title = holder?.getAttribute("title") || "";
       const unlocked = !!holder?.getAttribute("ondrop");
       const occupied = !(slot.style.backgroundImage || "").includes("/t/0.png");
-      const costMatch = title.match(/Unlock Cost:\s*(\d+)\s*Mastery Point/i);
-      const cost = costMatch ? Number(costMatch[1]) : 0;
-      all.push({ id, slot, unlocked, occupied, cost });
+      const costMatch = title.match(/(?:Unlock\s*Cost\s*:?\s*(\d+)\s*Mastery\s*Point(?:s)?|解锁消耗\s*(\d+)\s*支配点)/i);
+      const rawCost = costMatch ? (costMatch[1] || costMatch[2]) : "";
+      const cost = rawCost ? Number(rawCost) : 0;
+      const costParsed = !!costMatch && Number.isFinite(cost);
+      all.push({ id, slot, unlocked, occupied, cost, costParsed, title });
     }
     return { unlocked: all.filter((x) => x.unlocked), locked: all.filter((x) => !x.unlocked) };
   }

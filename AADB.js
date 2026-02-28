@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.5
+// @version      3.3.6
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -1536,7 +1536,26 @@ const AAD = {
         if (str.match(/^_/)) {
           const arr = str.split('_');
           const funcName = arr[1];
-          const args = arr.slice(2);
+          let args = arr.slice(2);
+
+          // hasDebuff参数兼容：忽略前缀wpn/trio，保留真实buff关键词
+          if (funcName === 'hasDebuff') {
+            const normalized = args
+              .filter((arg) => arg !== undefined && arg !== null && String(arg).trim() !== '')
+              .map((arg) => String(arg).trim());
+
+            while (normalized.length > 1) {
+              const head = normalized[0].toLowerCase();
+              if (head === 'wpn' || head === 'trio') {
+                normalized.shift();
+                continue;
+              }
+              break;
+            }
+
+            args = normalized.length > 0 ? [normalized.join('_')] : [];
+          }
+
           if (this.ConditionFunctions[funcName]) {
             const result = this.ConditionFunctions[funcName](...args, this._context);
             return result;

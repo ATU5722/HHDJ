@@ -28,8 +28,8 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 30, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 150, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 200, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 400, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
   ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
@@ -69,7 +69,7 @@ const dbTableColumnsAll = {
     { column_name: '小马图', field: 'horse', id: 'col_horse', default: false },
     { column_name: '火花', field: 'spark', id: 'col_spark', default: false },
     { column_name: '传说', field: 'legendary', tooltip: 'legendary_details', id: 'col_legendary', default: false },
-    { column_name: '无双', field: 'peerless', tooltip: 'peerless_details', id: 'col_peerless', default: false }
+    { column_name: '无双', field: 'peerless'， tooltip: 'peerless_details', id: 'col_peerless', default: false }
   ],
   '收入消耗': [
     { column_name: '经验', field: 'exp', tooltip: 'exp_details', id: 'col_exp', default: false },

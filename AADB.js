@@ -28,8 +28,8 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 200, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 400, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 30, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 150, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
   ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
@@ -4533,6 +4533,27 @@ const AAD = {
         this.resetFlowForNewDay();
       },
 
+      setManualStage(stage) {
+        const todayKey = AAD.Utils.Time.getUtcDayKey();
+        const normalizedStage = this.normalizeStage(stage);
+        const flow = this.ensureDailyFlowSync(todayKey);
+        if (flow.stage === normalizedStage && !flow.jumpLock && flow.dayKey === todayKey) {
+          return false;
+        }
+
+        const nextFlow = {
+          dayKey: todayKey,
+          stage: normalizedStage,
+          jumpLock: false
+        };
+        this.setFlowState(nextFlow);
+
+        if (this.isCrossWorldEnabled()) {
+          this.enforceWorldConsistency();
+        }
+        return true;
+      },
+
       ensureDailyFlowSync(dayKey) {
         const targetDayKey = dayKey || AAD.Utils.Time.getUtcDayKey();
         const flow = this.getFlowState();
@@ -6312,6 +6333,8 @@ const AAD = {
           </div>
           <div><input id="crossWorldArena" type="checkbox"><label for="crossWorldArena" style="color:#4CAF50;"><b>跨界连打</b></label>
             <button class="crossWorldJumpReset">重置跳转</button>
+            <button class="crossWorldSetIsekai">切换异界</button>
+            <button class="crossWorldSetDone">切换完成</button>
             <span id="crossWorldArenaIsekaiHint" style="display:none;color:#FF9800;margin-left:1em;">📍 当前在异世界，此选项在主世界控制</span>
           </div>
           <div><input id="encounter" type="checkbox"><label for="encounter"><b>自动遭遇</b></label> <button class="encounterResetPlan">重置计划</button> <input class="dbNumber" name="encounterDailyMin" placeholder="12" type="text">~<input class="dbNumber" name="encounterDailyMax" placeholder="24" type="text"></div>
@@ -6673,6 +6696,28 @@ const AAD = {
             if (confirm('是否重置跨世界跳转状态')) {
               AAD.Logic.World.resetFlowFromUI();
               alert('重置成功，跨世界流程状态已清空');
+            }
+            return;
+          }
+          if (target.closest('.crossWorldSetIsekai')) {
+            if (confirm('是否将跨世界流程切换到 isekai_running ？')) {
+              const changed = AAD.Logic.World.setManualStage(AAD.Logic.World.STAGE.ISEKAI_RUNNING);
+              if (changed) {
+                alert('已切换到 isekai_running');
+              } else {
+                alert('当前已是 isekai_running');
+              }
+            }
+            return;
+          }
+          if (target.closest('.crossWorldSetDone')) {
+            if (confirm('是否将跨世界流程切换到 done ？')) {
+              const changed = AAD.Logic.World.setManualStage(AAD.Logic.World.STAGE.DONE);
+              if (changed) {
+                alert('已切换到 done');
+              } else {
+                alert('当前已是 done');
+              }
             }
             return;
           }

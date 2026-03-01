@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.6
+// @version      3.3.7
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -69,7 +69,7 @@ const dbTableColumnsAll = {
     { column_name: '小马图', field: 'horse', id: 'col_horse', default: false },
     { column_name: '火花', field: 'spark', id: 'col_spark', default: false },
     { column_name: '传说', field: 'legendary', tooltip: 'legendary_details', id: 'col_legendary', default: false },
-    { column_name: '无双', field: 'peerless'， tooltip: 'peerless_details', id: 'col_peerless', default: false }
+    { column_name: '无双', field: 'peerless', tooltip: 'peerless_details', id: 'col_peerless', default: false }
   ],
   '收入消耗': [
     { column_name: '经验', field: 'exp', tooltip: 'exp_details', id: 'col_exp', default: false },

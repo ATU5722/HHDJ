@@ -3322,12 +3322,6 @@ const AAD = {
 
       // 闲置竞技场主函数 
       async runArena() {
-        // 跨世界状态检查
-        const needJump = AAD.Logic.World.checkJump();
-        if (needJump) {
-          return;
-        }
-
         const option = AAD.Core.Storage.getValue('option') || {};
         const resetState = this.ensureDailyReset();
         if (!resetState) {
@@ -3434,7 +3428,7 @@ const AAD = {
       },
 
       resetDailyState(info) {
-        this.resetCrossWorldCycle();
+        AAD.Logic.World.resetFlowForNewDay();
         const arena = this.buildArenaState({
           dayKey: info.dayKey
         });
@@ -3454,17 +3448,6 @@ const AAD = {
           dayKey: info.dayKey
         });
         setTimeout(() => AAD.Runtime.refreshPage(), 2000);
-      },
-
-      // 重置跨世界循环
-      resetCrossWorldCycle() {
-        const crossWorldState = AAD.Logic.World.getCrossWorldState();
-        if (crossWorldState.cycleCompleted) {
-          crossWorldState.cycleCompleted = false;
-          crossWorldState.isekaiCompleted = false;
-          crossWorldState.phase = 'main';
-          AAD.Logic.World.setCrossWorldState(crossWorldState);
-        }
       },
 
       findArenaButtonInfo(data, id) {
@@ -4349,12 +4332,17 @@ const AAD = {
 
         // 启动遭遇战检查
         const option = AAD.Core.Storage.getValue('option') || {};
+        AAD.Logic.World.syncCrossWorldEnabledFromOption(option);
         const todayKey = AAD.Utils.Time.getUtcDayKey();
         const arenaAutoStart = AAD.Core.Storage.getValue('arenaAutoStart');
         if (arenaAutoStart) {
           if (arenaAutoStart.dayKey !== todayKey) {
             AAD.Core.Storage.delValue('arenaAutoStart');
           }
+        }
+
+        if (AAD.Logic.World.enforceWorldConsistency()) {
+          return;
         }
 
         if (option.encounter) {
@@ -4473,171 +4461,182 @@ const AAD = {
     },
 
     World: {
-      // 跳转到异世界
-      jumpToIsekai() {
-        console.log('[跨世界] 跳转到异世界');
+      FLOW_KEY: 'crossWorldFlow',
+      ENABLED_KEY: 'crossWorldEnabled',
 
-        const crossWorldState = this.getCrossWorldState();
-        crossWorldState.phase = 'isekai';
-        crossWorldState.isekaiCompleted = false;
-        crossWorldState.jumping = false;
+      STAGE: Object.freeze({
+        MAIN_RUNNING: 'main_running',
+        ISEKAI_RUNNING: 'isekai_running',
+        DONE: 'done'
+      }),
 
-        this.setCrossWorldState(crossWorldState);
-
-        // 执行跳转
-        this.performWorldJump('isekai');
+      normalizeStage(stage) {
+        if (stage === this.STAGE.MAIN_RUNNING ||
+            stage === this.STAGE.ISEKAI_RUNNING ||
+            stage === this.STAGE.DONE) {
+          return stage;
+        }
+        return this.STAGE.MAIN_RUNNING;
       },
 
-      // 返回主世界
-      returnToMainWorld() {
-        console.log('[跨世界] 返回主世界');
-
-        const crossWorldState = this.getCrossWorldState();
-        crossWorldState.phase = 'main';
-        crossWorldState.isekaiCompleted = true;
-        crossWorldState.cycleCompleted = true;
-        crossWorldState.triggeredByArena = false;
-        crossWorldState.jumping = false;
-
-        this.setCrossWorldState(crossWorldState);
-
-        console.log('[跨世界] 循环已完成，允许手动访问异世界');
-
-        // 执行跳转
-        this.performWorldJump('main');
+      isCrossWorldEnabled() {
+        return !!AAD.Core.Storage.getValue(this.ENABLED_KEY);
       },
 
-      // 跨世界守卫检查：主世界依赖配置，异世界可选依赖流程
-      checkCrossWorldGuard(state, requireFlowInIsekai = false) {
-        const isMainWorld = !AAD.Runtime.isIsekai();
-        if (isMainWorld) {
-          const option = AAD.Core.Storage.getValue('option') || {};
-          if (!option?.crossWorldArena) {
-            return { ok: false, isMainWorld };
-          }
-        } else if (requireFlowInIsekai) {
-          const isInCrossWorldFlow = state.triggeredByArena || state.phase === 'isekai';
-          if (!isInCrossWorldFlow) {
-            return { ok: false, isMainWorld };
-          }
-        }
-
-        return { ok: true, isMainWorld };
+      setCrossWorldEnabled(enabled) {
+        AAD.Core.Storage.setValue(this.ENABLED_KEY, !!enabled);
       },
 
-      // 检查跨世界跳转
-      checkJump() {
-        const crossWorldState = this.getCrossWorldState();
-        const guard = this.checkCrossWorldGuard(crossWorldState, false);
-        if (!guard.ok) {
-          return false;
+      syncCrossWorldEnabledFromOption(option) {
+        if (AAD.Runtime.isIsekai()) {
+          return;
         }
-        const isMainWorld = guard.isMainWorld;
+        this.setCrossWorldEnabled(!!(option && option.crossWorldArena));
+      },
 
-        // 检查各种跳转条件
-        if (crossWorldState.jumping) {
-          return true; // 正在跳转中
+      createDefaultFlow(dayKey) {
+        return {
+          dayKey: dayKey || AAD.Utils.Time.getUtcDayKey(),
+          stage: this.STAGE.MAIN_RUNNING,
+          jumpLock: false
+        };
+      },
+
+      getFlowState() {
+        const stored = AAD.Core.Storage.getValue(this.FLOW_KEY) || {};
+        const dayKey = stored.dayKey || AAD.Utils.Time.getUtcDayKey();
+        return {
+          dayKey,
+          stage: this.normalizeStage(stored.stage),
+          jumpLock: !!stored.jumpLock
+        };
+      },
+
+      setFlowState(state) {
+        const current = this.getFlowState();
+        const next = {
+          dayKey: state && state.dayKey ? state.dayKey : current.dayKey,
+          stage: this.normalizeStage(state && state.stage),
+          jumpLock: !!(state && state.jumpLock)
+        };
+        AAD.Core.Storage.setValue(this.FLOW_KEY, next);
+      },
+
+      resetFlowForNewDay(dayKey) {
+        const targetDayKey = dayKey || AAD.Utils.Time.getUtcDayKey();
+        this.setFlowState(this.createDefaultFlow(targetDayKey));
+      },
+
+      resetFlowFromUI() {
+        AAD.Core.Storage.delValue('crossWorldState');
+        AAD.Core.Storage.delValue('crossWorldFlow');
+        this.resetFlowForNewDay();
+      },
+
+      ensureDailyFlowSync(dayKey) {
+        const targetDayKey = dayKey || AAD.Utils.Time.getUtcDayKey();
+        const flow = this.getFlowState();
+        if (flow.dayKey !== targetDayKey) {
+          this.resetFlowForNewDay(targetDayKey);
+          return this.getFlowState();
         }
+        return flow;
+      },
 
-        if (crossWorldState.phase === 'isekai' && isMainWorld && !crossWorldState.isekaiCompleted) {
-          console.log('[跨世界] 应该在异世界但在主世界，正在跳转');
-          this.jumpToIsekai();
+      resolveExpectedWorld(flow) {
+        const stage = this.normalizeStage(flow && flow.stage);
+        if (stage === this.STAGE.ISEKAI_RUNNING) return 'isekai';
+        return 'main';
+      },
+
+      buildJumpUrl(targetWorld) {
+        const currentUrl = window.location.origin + window.location.pathname;
+        if (targetWorld === 'isekai') {
+          return AAD.Runtime.isIsekai()
+            ? currentUrl
+            : currentUrl.replace(/hentaiverse\.org\//, 'hentaiverse.org/isekai/');
+        }
+        return currentUrl.replace(/\/isekai\//, '/');
+      },
+
+      startJump(flow, targetWorld, reason = '') {
+        if (!flow || flow.jumpLock) {
           return true;
         }
+        const nextFlow = { ...flow, jumpLock: true };
+        this.setFlowState(nextFlow);
+        const targetUrl = this.buildJumpUrl(targetWorld);
+        const reasonText = reason ? `，原因：${reason}` : '';
+        console.log(`[跨世界] 执行防卫跳转 -> ${targetWorld}${reasonText}`);
+        document.title = `[AAD] 跳转到${targetWorld === 'isekai' ? '异世界' : '主世界'}`;
+        AAD.UI.UITools.openUrl(targetUrl);
+        return true;
+      },
 
-        if (crossWorldState.isekaiCompleted && !isMainWorld) {
-          if (crossWorldState.triggeredByArena) {
-            console.log('[跨世界] 竞技场完成异世界，返回中');
-            this.returnToMainWorld();
-            return true;
-          } else {
-            console.log('[跨世界] 检测到手动访问异世界');
-            return false;
-          }
-        }
-
-        if (crossWorldState.cycleCompleted) {
-          console.log('[跨世界] 每日循环已完成');
+      enforceWorldConsistency() {
+        if (!this.isCrossWorldEnabled()) {
           return false;
         }
 
-        return false;
-      },
+        const todayKey = AAD.Utils.Time.getUtcDayKey();
+        const flow = this.ensureDailyFlowSync(todayKey);
+        const isIsekai = AAD.Runtime.isIsekai();
+        const expectedWorld = this.resolveExpectedWorld(flow);
+        const currentWorld = isIsekai ? 'isekai' : 'main';
 
-      // 获取跨世界状态
-      getCrossWorldState() {
-        return AAD.Core.Storage.getValue('crossWorldState') || {
-          phase: 'main',
-          isekaiCompleted: false,
-          cycleCompleted: false,
-          triggeredByArena: false,
-          jumping: false  // 是否正在跳转中
-        };
+        if (flow.stage === this.STAGE.DONE) {
+          if (flow.jumpLock) {
+            this.setFlowState({ ...flow, jumpLock: false });
+          }
+          return false;
+        }
+
+        if (currentWorld === expectedWorld) {
+          if (flow.jumpLock) {
+            this.setFlowState({ ...flow, jumpLock: false });
+          }
+          return false;
+        }
+
+        return this.startJump(flow, expectedWorld, '当前世界与流程阶段不一致');
       },
 
       // 处理竞技场完成后的跨世界逻辑
       handleArenaCompleteCrossWorld(reason) {
-
-        const crossWorldState = this.getCrossWorldState();
-        console.log(`[跨世界] ${reason}`);
-        const guard = this.checkCrossWorldGuard(crossWorldState, true);
-        if (!guard.ok) {
+        if (!this.isCrossWorldEnabled()) {
           return;
         }
-        const isMainWorld = guard.isMainWorld;
 
-        if (crossWorldState.cycleCompleted) {
+        const flow = this.ensureDailyFlowSync();
+        const isMainWorld = !AAD.Runtime.isIsekai();
+        const worldLabel = isMainWorld ? '主世界' : '异世界';
+        console.log(`[跨世界] ${worldLabel}竞技场完成：${reason}`);
+
+        if (flow.stage === this.STAGE.DONE) {
           console.log('[跨世界] 本日循环已完成，不触发跳转');
           return;
         }
 
-        if (!isMainWorld) {
-          // 异世界完成 → 返回主世界
-          crossWorldState.isekaiCompleted = true;
-          crossWorldState.phase = 'main';  // 直接设置为main，因为即将返回
-          crossWorldState.triggeredByArena = true;
-          crossWorldState.jumping = true;  // 标记正在跳转中
-          this.setCrossWorldState(crossWorldState);
-
-          console.log('[跨世界] 异世界竞技场完成，立即返回主世界');
-          document.title = AAD.Utils.Common.alert(-1, '异世界完成');
-          this.returnToMainWorld();
-        } else {
-          // 主世界完成 → 跳转异世界
-          crossWorldState.phase = 'isekai';
-          crossWorldState.triggeredByArena = true;
-          crossWorldState.jumping = true;  // 标记正在跳转中
-          this.setCrossWorldState(crossWorldState);
-
-          console.log('[跨世界] 主世界竞技场完成，立即跳转异世界');
+        if (isMainWorld) {
+          if (flow.stage !== this.STAGE.MAIN_RUNNING) {
+            console.log('[跨世界] 当前阶段不是主世界流程，忽略主世界完成信号');
+            return;
+          }
+          const nextFlow = { ...flow, stage: this.STAGE.ISEKAI_RUNNING, jumpLock: false };
+          this.setFlowState(nextFlow);
           document.title = AAD.Utils.Common.alert(-1, '主世界完成');
-          this.jumpToIsekai();
-        }
-      },
-
-      // 设置跨世界状态
-      setCrossWorldState(state) {
-        AAD.Core.Storage.setValue('crossWorldState', state);
-      },
-
-      // 执行世界跳转
-      performWorldJump(targetWorld) {
-        document.title = `[AAD] 跳转到${targetWorld === 'isekai' ? '异世界' : '主世界'}`;
-
-        const currentUrl = window.location.origin + window.location.pathname;
-        let targetUrl;
-
-        if (targetWorld === 'isekai') {
-          targetUrl = AAD.Runtime.isIsekai() ?
-            currentUrl :
-            currentUrl.replace(/hentaiverse\.org\//, 'hentaiverse.org/isekai/');
-        } else {
-          targetUrl = currentUrl.replace(/\/isekai\//, '/');
+          this.startJump(nextFlow, 'isekai', '主世界竞技场完成');
+          return;
         }
 
-        console.log(`[跨世界] 跳转到: ${targetUrl}`);
-
-        AAD.UI.UITools.openUrl(targetUrl);
+        if (flow.stage !== this.STAGE.ISEKAI_RUNNING) {
+          console.log('[跨世界] 当前阶段不是异世界流程，忽略异世界完成信号');
+          return;
+        }
+        const nextFlow = { ...flow, stage: this.STAGE.DONE, jumpLock: false };
+        this.setFlowState(nextFlow);
+        document.title = AAD.Utils.Common.alert(-1, '异世界完成');
+        this.startJump(nextFlow, 'main', '异世界竞技场完成');
       }
     },
 
@@ -6672,8 +6671,8 @@ const AAD = {
           }
           if (target.closest('.crossWorldJumpReset')) {
             if (confirm('是否重置跨世界跳转状态')) {
-              AAD.Core.Storage.delValue('crossWorldState');
-              alert('重置成功，跨世界跳转状态已清空');
+              AAD.Logic.World.resetFlowFromUI();
+              alert('重置成功，跨世界流程状态已清空');
             }
             return;
           }
@@ -7013,9 +7012,15 @@ const AAD = {
 
       // 处理跨界连打UI
       handleSpecialConfigItems(panel) {
+        const crossWorldEnabled = AAD.Logic.World.isCrossWorldEnabled();
+
+        const crossWorldCheckbox = panel.querySelector('#crossWorldArena');
+        if (crossWorldCheckbox) {
+          crossWorldCheckbox.checked = crossWorldEnabled;
+        }
+
         // 异世界UI禁用
         if (AAD.Runtime.isIsekai()) {
-          const crossWorldCheckbox = panel.querySelector('#crossWorldArena');
           if (crossWorldCheckbox) {
             const disabledOpacity = '0.5';
             crossWorldCheckbox.disabled = true;

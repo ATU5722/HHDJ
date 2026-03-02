@@ -32,6 +32,8 @@ const GAME_MECHANICS = {
   DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
   ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
+  GIFT_MIN_HOURS: 24,              // 自动收礼最小间隔小时
+  GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
 
@@ -4663,8 +4665,30 @@ const AAD = {
 
     // 游戏辅助功能模块
     Utility: {
+      GIFT_INTERVAL_KEY: 'nextGiftIntervalMs',
+
+      getNextGiftIntervalMs(forceRefresh = false) {
+        const minMs = GAME_MECHANICS.GIFT_MIN_HOURS * 3600 * 1000;
+        const maxMs = GAME_MECHANICS.GIFT_MAX_HOURS * 3600 * 1000;
+        const createRandomInterval = () => Math.round(minMs + Math.random() * (maxMs - minMs));
+
+        if (forceRefresh) {
+          const next = createRandomInterval();
+          AAD.Core.Storage.setValue(this.GIFT_INTERVAL_KEY, next);
+          return next;
+        }
+
+        const interval = Number(AAD.Core.Storage.getValue(this.GIFT_INTERVAL_KEY));
+        if (!Number.isFinite(interval) || interval < minMs || interval > maxMs) {
+          const next = createRandomInterval();
+          AAD.Core.Storage.setValue(this.GIFT_INTERVAL_KEY, next);
+          return next;
+        }
+        return interval;
+      },
+
       // 礼物领取功能
-      async receiveGifts(days = 3) {
+      async receiveGifts() {
         if (AAD.Runtime.isIsekai()) {
           return;
         }
@@ -4672,10 +4696,12 @@ const AAD = {
 
         const gifturl = "?s=Bazaar&ss=ml";
         const nowtime = Date.now();
-        const timedelta = days * 24 * 3600 * 1000;
-        const lastGiftTime = AAD.Core.Storage.getValue('lastGiftTime');
+        const lastGiftTime = Number(AAD.Core.Storage.getValue('lastGiftTime')) || 0;
+        const nextGiftIntervalMs = this.getNextGiftIntervalMs();
+        const nextGiftTime = (lastGiftTime || nowtime) + nextGiftIntervalMs;
+        console.log(`[自动收礼][测试] 下次计划时间: ${new Date(nextGiftTime).toLocaleString()}`);
 
-        if (lastGiftTime && nowtime - lastGiftTime < timedelta) {
+        if (lastGiftTime && (nowtime - lastGiftTime) < nextGiftIntervalMs) {
           AAD.Utils.Common.showStatus('礼物领取: 时间未到，无需领取');
           return;
         }
@@ -4685,6 +4711,9 @@ const AAD = {
         await AAD.Core.Network.postPromise(gifturl);
         await AAD.Core.Network.postPromise(gifturl, "feed_all=food");
         AAD.Core.Storage.setValue('lastGiftTime', nowtime);
+        const refreshedIntervalMs = this.getNextGiftIntervalMs(true);
+        const refreshedNextGiftTime = nowtime + refreshedIntervalMs;
+        console.log(`[自动收礼][测试] 新周期下次计划时间: ${new Date(refreshedNextGiftTime).toLocaleString()}`);
         AAD.Utils.Common.showStatus('礼物领取完成');
       },
 

@@ -28,10 +28,10 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 25, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
-  ENCOUNTER_INTERVAL_MIN_MINUTES: 31, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 450, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 610, // 每日重置延迟最大分钟数
+  ENCOUNTER_INTERVAL_MIN_MINUTES: 30, // 遭遇战间隔最小分钟数（不能少于30）
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
   GIFT_MIN_HOURS: 24,              // 自动收礼最小间隔小时
   GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
@@ -6373,7 +6373,7 @@ const AAD = {
           <div><input id="autobuy" type="checkbox"><label for="autobuy"><b>自动补充</b></label><input class="dbInputWide" name="autobuylist" type="text"></div>
           <div><input id="regifts" type="checkbox"><label for="regifts"><b>自动收礼</b></label></div>
           <div><input id="restoreStamina" type="checkbox"><label for="restoreStamina"><b>战前回复</b>: </label>
-            <span class="dbTipText">战斗前，体力<<input class="dbNumber" name="staminaLow" placeholder="15" type="text"></label></span><br>
+            <span class="dbTipText">自动AR入场前,体力<<input class="dbNumber" name="staminaLow" placeholder="15" type="text"></label></span><br>
             <span class="dbTipText">不勾选时，小于设定值则不进行自动AR</span></div>
         `;
       },

@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.7
+// @version      3.3.8
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -192,6 +192,7 @@ const SPECIAL_SKILLS = {
   FRD: { id: '1101', oc: 4 },
   Cor: { id: '161', oc: 0 },
   Smi: { id: '151', oc: 0 },
+  FBl: { id: '111', oc: 0 },
   T3: { idSuffix: '03', oc: 2 },
   T2: { idSuffix: '02', oc: 2 },
   T1: { idSuffix: '01', oc: 2 }
@@ -3428,7 +3429,6 @@ const AAD = {
       },
 
       resetDailyState(info) {
-        AAD.Logic.World.resetFlowForNewDay();
         const arena = this.buildArenaState({
           dayKey: info.dayKey
         });
@@ -6454,11 +6454,12 @@ const AAD = {
         return `
           <div class="skillOrder"><span class="dbTipText">施放顺序</span>
             <input class="dbInputWide" name="skillOrder" type="text" disabled><br>
-            <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC">马炮</label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD">龙吼</label><input id="skillOrder_Cor" type="checkbox"><label for="skillOrder_Cor">腐败</label><input id="skillOrder_Smi" type="checkbox"><label for="skillOrder_Smi">惩戒</label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>
-          <div><b>友情小马炮</b> <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC" class="dbTipText">一层一次</label> <div class="customize" name="skillOFCCondition"></div></div>
+            <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC">马炮</label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD">龙吼</label><input id="skillOrder_Cor" type="checkbox"><label for="skillOrder_Cor">腐败</label><input id="skillOrder_Smi" type="checkbox"><label for="skillOrder_Smi">惩戒</label><input id="skillOrder_FBl" type="checkbox"><label for="skillOrder_FBl">炎爆</label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>
+          <div><b>马炮</b> <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC" class="dbTipText">一层一次</label> <div class="customize" name="skillOFCCondition"></div></div>
           <div><b>龙吼</b> <input id="skillOTOS_FRD" type="checkbox"><label for="skillOTOS_FRD" class="dbTipText">一层一次</label> <div class="customize" name="skillFRDCondition"></div></div>
           <div><b>腐败</b> <input id="skillOTOS_Cor" type="checkbox"><label for="skillOTOS_Cor" class="dbTipText">一层一次</label> <div class="customize" name="skillCorCondition"></div></div>
           <div><b>惩戒</b> <input id="skillOTOS_Smi" type="checkbox"><label for="skillOTOS_Smi" class="dbTipText">一层一次</label> <div class="customize" name="skillSmiCondition"></div></div>
+          <div><b>炎爆</b> <input id="skillOTOS_FBl" type="checkbox"><label for="skillOTOS_FBl" class="dbTipText">一层一次</label> <div class="customize" name="skillFBlCondition"></div></div>
           <div><label><b>战斗风格</b></label> <select class="dbNumber" name="fightingStyle"><option value="1">二天一流</option><option value="2">单手</option><option value="3">双手</option><option value="4">双持</option></select></div>
           <div><b>T3</b> <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3" class="dbTipText">一层一次</label> <div class="customize" name="skillT3Condition"></div></div>
           <div><b>T2</b> <input id="skillOTOS_T2" type="checkbox"><label for="skillOTOS_T2" class="dbTipText">一层一次</label> <div class="customize" name="skillT2Condition"></div></div>
@@ -6686,7 +6687,7 @@ const AAD = {
             return;
           }
           if (target.closest('.idleArenaReset')) {
-            if (confirm('是否重置竞技场战斗记录')) {
+            if (confirm('是否重置竞技场队列状态')) {
               AAD.Core.Storage.delValue('arena');
               alert('重置成功');
             }
@@ -7078,7 +7079,6 @@ const AAD = {
           if (isekaiHint) {
             isekaiHint.style.display = 'inline';
           }
-          console.log('[跨世界] 异世界UI：禁用跨世界连打选项');
         }
       },
 

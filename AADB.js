@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.8
+// @version      3.3.9
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,10 +28,10 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 30, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 650, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 25, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 30, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
   GIFT_MIN_HOURS: 24,              // 自动收礼最小间隔小时
   GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
@@ -3140,10 +3140,10 @@ const AAD = {
         // 使用其他技能
         useSpecialSkills() {
           const option = AAD.Core.Storage.getValue('option') || {};
-          if (!option.skillSwitch) return null;
+          if (!option.skillSwitch) return;
 
           const skillOrder = Array.isArray(option.skillOrder) ? option.skillOrder : [];
-          if (skillOrder.length === 0) return null;
+          if (skillOrder.length === 0) return;
           const oc = AAD.Core.State.get('oc') || 0;
           const skillOTOS = AAD.Core.State.get('skillOTOS') || {};
           const fightingStyle = option.fightingStyle || '1';
@@ -3176,10 +3176,8 @@ const AAD = {
             skillOTOS[skillType] = (skillOTOS[skillType] || 0) + 1;
             AAD.Core.State.set('skillOTOS', skillOTOS);
             AAD.Utils.DOM.gE(skillId).click();
-            return skillType;
+            return;
           }
-
-          return null;
         },
 
         // AOE目标选择 - 战斗核心逻辑，所有子模块共享
@@ -3289,20 +3287,16 @@ const AAD = {
 
           const tmode = this.selectAttackSkill();
 
-          const usedSkill = this.useSpecialSkills();
+          this.useSpecialSkills();
 
           const monsterStatus = AAD.Core.State.get('monsterStatus');
 
           if (tmode === 0) {
-            if (usedSkill === 'T3') {
-              this.selectAOETarget(2);
-            } else {
-              if (monsterStatus && monsterStatus.length > 0) {
-                AAD.Utils.DOM.gE('#mkey_' + monsterStatus[0].id).click();
-              }
+            if (monsterStatus && monsterStatus.length > 0) {
+              AAD.Utils.DOM.gE('#mkey_' + monsterStatus[0].id).click();
             }
           } else {
-            this.selectAOETarget(tmode, buffSnapshot, true);
+            this.selectAOETarget(tmode, buffSnapshot);
           }
 
           AAD.Core.State.set('end', true);

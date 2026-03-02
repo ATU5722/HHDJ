@@ -4698,8 +4698,6 @@ const AAD = {
         const nowtime = Date.now();
         const lastGiftTime = Number(AAD.Core.Storage.getValue('lastGiftTime')) || 0;
         const nextGiftIntervalMs = this.getNextGiftIntervalMs();
-        const nextGiftTime = (lastGiftTime || nowtime) + nextGiftIntervalMs;
-        console.log(`[自动收礼][测试] 下次计划时间: ${new Date(nextGiftTime).toLocaleString()}`);
 
         if (lastGiftTime && (nowtime - lastGiftTime) < nextGiftIntervalMs) {
           AAD.Utils.Common.showStatus('礼物领取: 时间未到，无需领取');
@@ -4711,9 +4709,7 @@ const AAD = {
         await AAD.Core.Network.postPromise(gifturl);
         await AAD.Core.Network.postPromise(gifturl, "feed_all=food");
         AAD.Core.Storage.setValue('lastGiftTime', nowtime);
-        const refreshedIntervalMs = this.getNextGiftIntervalMs(true);
-        const refreshedNextGiftTime = nowtime + refreshedIntervalMs;
-        console.log(`[自动收礼][测试] 新周期下次计划时间: ${new Date(refreshedNextGiftTime).toLocaleString()}`);
+        this.getNextGiftIntervalMs(true);
         AAD.Utils.Common.showStatus('礼物领取完成');
       },
 

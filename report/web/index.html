@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HV 管理面板</title>
+  <style>
+    body{margin:0;background:#f5f7fb;color:#1f2937;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input,button{height:32px;padding:0 10px;border-radius:8px;border:1px solid #d1d5db}
+    button{background:#111827;color:#fff;border-color:#111827;cursor:pointer}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eef2f7;text-align:left;font-size:13px}
+    .muted{color:#6b7280}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="row"><strong>HV 管理面板</strong><span class="muted">ID与金额固定 + 3项按天</span></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <label>管理Token</label><input id="token" type="password" placeholder="可空">
+      <button id="loadAccounts">加载账号列表</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+      <tr><th>账号ID</th><th>主金额</th><th>异金额</th><th>主金额时间</th><th>异金额时间</th><th>更新时间</th><th>操作</th></tr>
+      </thead>
+      <tbody id="accountRows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <label>当前账号</label><strong id="currentAccount">-</strong>
+      <label>从</label><input id="from" type="date">
+      <label>到</label><input id="to" type="date">
+      <button id="loadDaily">加载按天数据</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+      <tr>
+        <th>日期</th><th>主rounds</th><th>异rounds</th><th>主最早AR</th><th>异最早AR</th><th>主L/P</th><th>异L/P</th><th>AADB</th>
+      </tr>
+      </thead>
+      <tbody id="dailyRows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let selectedAccount = "";
+
+  function n(v){const x=Number(v);return Number.isFinite(x)?x.toLocaleString():"-";}
+  function t(v){return v?String(v):"-";}
+
+  async function api(path){
+    const token = $("token").value.trim();
+    const headers = token ? {"X-Admin-Token": token} : {};
+    const r = await fetch(path,{headers});
+    if(!r.ok) throw new Error("HTTP_"+r.status);
+    return r.json();
+  }
+
+  async function loadAccounts(){
+    const data = await api('/api/v1/admin/accounts');
+    const items = data.items || [];
+    $("accountRows").innerHTML = items.map(x=>`<tr>
+      <td>${t(x.account_id)}</td>
+      <td>${n(x.market_main_balance)}</td>
+      <td>${n(x.market_isekai_balance)}</td>
+      <td>${t(x.market_main_saved_at)}</td>
+      <td>${t(x.market_isekai_saved_at)}</td>
+      <td>${t(x.updated_at)}</td>
+      <td><button data-id="${String(x.account_id).replace(/"/g,'&quot;')}">查看按天</button></td>
+    </tr>`).join('');
+    Array.from(document.querySelectorAll('#accountRows button')).forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        selectedAccount = btn.getAttribute('data-id') || '';
+        $("currentAccount").textContent = selectedAccount || '-';
+        loadDaily().catch(e=>alert('加载失败: '+e.message));
+      });
+    });
+  }
+
+  async function loadDaily(){
+    if(!selectedAccount){alert('请先从上表选择账号');return;}
+    const from = $("from").value ? `&from=${encodeURIComponent($("from").value)}` : '';
+    const to = $("to").value ? `&to=${encodeURIComponent($("to").value)}` : '';
+    const data = await api(`/api/v1/admin/account/${encodeURIComponent(selectedAccount)}/daily?1=1${from}${to}`);
+    const items = data.items || [];
+    $("dailyRows").innerHTML = items.map(x=>`<tr>
+      <td>${t(x.report_date_utc)}</td>
+      <td>${n(x.main_rounds_total)}</td>
+      <td>${n(x.isekai_rounds_total)}</td>
+      <td>${t(x.main_first_ar_start_time_utc)}</td>
+      <td>${t(x.isekai_first_ar_start_time_utc)}</td>
+      <td>${n(x.main_legendary_total)}/${n(x.main_peerless_total)}</td>
+      <td>${n(x.isekai_legendary_total)}/${n(x.isekai_peerless_total)}</td>
+      <td>${t(x.aadb_status)}</td>
+    </tr>`).join('');
+  }
+
+  $("loadAccounts").addEventListener('click',()=>loadAccounts().catch(e=>alert('加载失败: '+e.message)));
+  $("loadDaily").addEventListener('click',()=>loadDaily().catch(e=>alert('加载失败: '+e.message)));
+</script>
+</body>
+</html>

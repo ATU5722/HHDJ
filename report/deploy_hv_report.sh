@@ -10,11 +10,9 @@ WEB_DIR="$APP_DIR/web"
 DATA_DIR="$APP_DIR/data"
 SRC_DIR="$APP_DIR/src"
 SERVICE_FILE="/etc/systemd/system/hv-report.service"
-NGINX_CONF="/etc/nginx/sites-available/hv-report"
-NGINX_LINK="/etc/nginx/sites-enabled/hv-report"
 
 HOST="0.0.0.0"
-PORT="8080"
+PORT="18080"
 DB_PATH="$DATA_DIR/hv_report.db"
 API_KEY="hvtb_report_signing_key_v1_2026_03_04"
 SIG_WINDOW_SEC="300"
@@ -38,7 +36,7 @@ require_root() {
 
 install_deps() {
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget tar nginx ca-certificates
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget tar ca-certificates
 }
 
 go_version_value() {
@@ -147,39 +145,10 @@ WantedBy=multi-user.target
 EOF
 }
 
-write_nginx() {
-  rm -f /etc/nginx/sites-enabled/default || true
-  cat > "$NGINX_CONF" <<EOF
-server {
-    listen 80;
-    server_name _;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:$PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        client_max_body_size 1m;
-    }
-
-    location / {
-        root $APP_DIR;
-        try_files \$uri \$uri/ /web/index.html;
-    }
-}
-EOF
-  ln -sf "$NGINX_CONF" "$NGINX_LINK"
-  nginx -t
-}
-
 restart_services() {
   systemctl daemon-reload
   systemctl enable hv-report.service
   systemctl restart hv-report.service
-  systemctl enable nginx
-  systemctl restart nginx
 }
 
 show_result() {
@@ -188,8 +157,8 @@ show_result() {
   echo "Service status:"
   systemctl --no-pager --full status hv-report.service | sed -n '1,12p'
   echo
-  echo "API endpoint:   http://$SERVER_IP/api/v1/report/daily"
-  echo "Admin page:     http://$SERVER_IP/"
+  echo "API endpoint:   http://$SERVER_IP:$PORT/api/v1/report/daily"
+  echo "Admin page:     http://$SERVER_IP:$PORT/"
   if [[ -n "$ADMIN_TOKEN" ]]; then
     echo "Admin token:    $ADMIN_TOKEN"
   else
@@ -197,8 +166,12 @@ show_result() {
   fi
   echo
   echo "HVTB.js should use:"
-  echo "REPORT_ENDPOINT = \"http://$SERVER_IP/api/v1/report/daily\""
+  echo "REPORT_ENDPOINT = \"http://$SERVER_IP:$PORT/api/v1/report/daily\""
   echo "REPORT_API_KEY  = \"$API_KEY\""
+  echo
+  echo "If firewall is enabled, allow port $PORT:"
+  echo "ufw:       sudo ufw allow $PORT/tcp"
+  echo "firewalld: sudo firewall-cmd --permanent --add-port=$PORT/tcp && sudo firewall-cmd --reload"
 }
 
 main() {
@@ -214,7 +187,6 @@ main() {
   build_server
   write_env
   write_service
-  write_nginx
   restart_services
   show_result
 }

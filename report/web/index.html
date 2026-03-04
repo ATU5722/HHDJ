@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HV 管理面板</title>
+  <style>
+    :root{
+      --bg-a:#edf2f8;
+      --bg-b:#f7fafd;
+      --panel:#ffffff;
+      --line:#dfe7f1;
+      --line-soft:#e8eef6;
+      --text:#1f2937;
+      --muted:#5e6f84;
+      --brand:#1e3a5f;
+      --soft:#eaf2fb;
+      --chip:#ffffff;
+      --chip-active:#e8f1fc;
+      --chip-border:#ccd8e6;
+      --th-bg:#f6f9fd;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,var(--bg-a) 0%,var(--bg-b) 100%);color:var(--text);font:14px/1.5 "Segoe UI",Tahoma,sans-serif;transition:background .25s,color .25s}
+    .wrap{max-width:1680px;margin:0 auto;padding:20px 24px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+    .title{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+    h1{margin:0;font-size:20px;color:#16324f;letter-spacing:.2px}
+    .muted{color:var(--muted)}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .toolbar input,.toolbar button{height:34px;padding:0 10px;border:1px solid var(--chip-border);border-radius:8px;background:#fff;color:var(--text)}
+    .toolbar button{background:var(--brand);border-color:var(--brand);color:#fff;cursor:pointer}
+    .toolbar-spacer{flex:1 1 auto}
+    .account-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+    .account-chip{border:1px solid var(--chip-border);border-radius:10px;padding:10px;background:var(--chip);cursor:pointer}
+    .account-chip.active{border-color:#2b5f95;background:var(--chip-active)}
+    .account-chip .id{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .account-chip .money{margin-top:4px;font-size:12px;color:var(--muted)}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .section-title{margin:0 0 10px 0;font-size:16px;color:#16324f}
+    .kv{display:grid;grid-template-columns:120px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line-soft)}
+    .kv:last-child{border-bottom:none}
+    .kv .k{color:var(--muted)}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;min-width:980px}
+    th,td{padding:8px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:13px}
+    th{color:#334155;background:var(--th-bg)}
+    th:nth-child(1),td:nth-child(1){width:120px;white-space:nowrap}
+    th:nth-child(2),td:nth-child(2){width:88px;white-space:nowrap}
+    th:nth-child(3),td:nth-child(3){width:170px;white-space:nowrap}
+    th:nth-child(4),td:nth-child(4){width:auto}
+    .empty{padding:16px;text-align:center;color:#7b8794}
+    .drop-list{display:flex;flex-direction:column;gap:4px}
+    .drop-item{white-space:nowrap}
+    .danger{background:#7f1d1d !important;border-color:#7f1d1d !important}
+    .theme-btn{min-width:94px}
+
+    body.theme-dark{
+      --bg-a:#0f1724;
+      --bg-b:#0b1019;
+      --panel:#131d2b;
+      --line:#243247;
+      --line-soft:#27364b;
+      --text:#e6edf8;
+      --muted:#a1b2c9;
+      --brand:#2f5f95;
+      --soft:#1b2d45;
+      --chip:#121b29;
+      --chip-active:#1b2d45;
+      --chip-border:#2c3f59;
+      --th-bg:#172335;
+    }
+    body.theme-dark h1{color:#b8d5f7}
+    body.theme-dark .toolbar input{background:#111a28;color:var(--text)}
+    body.theme-dark .empty{color:#93a8c1}
+    @media (max-width:980px){.split{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel title">
+    <h1 id="pageTitle">当前账号：-</h1>
+  </div>
+
+  <div class="panel">
+    <div id="accountGrid" class="account-grid"></div>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <button id="reloadAccounts">加载全部账号</button>
+      <button id="themeToggle" class="theme-btn">夜间模式</button>
+      <label>从</label><input id="from" type="date">
+      <label>到</label><input id="to" type="date">
+      <button id="reloadDaily">刷新当前账号</button>
+      <span class="toolbar-spacer"></span>
+      <button id="deleteAccount" class="danger">删号</button>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="panel">
+      <h3 class="section-title">主世界</h3>
+      <div id="mainLatest">
+        <div class="kv"><div class="k">账号状态</div><div>暂无账号</div></div>
+        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
+        <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>日期</th><th>Rounds</th><th>最早AR</th><th>装备</th></tr>
+        </thead>
+        <tbody id="mainDailyRows"></tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <h3 class="section-title">异世界</h3>
+      <div id="isekaiLatest">
+        <div class="kv"><div class="k">账号状态</div><div>暂无账号</div></div>
+        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
+        <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>日期</th><th>Rounds</th><th>最早AR</th><th>装备</th></tr>
+        </thead>
+        <tbody id="isekaiDailyRows"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const THEME_KEY = "hv_report_theme_mode";
+  let accounts = [];
+  let selectedAccount = "";
+
+  function applyTheme(mode){
+    const dark = mode === "dark";
+    document.body.classList.toggle("theme-dark", dark);
+    const btn = $("themeToggle");
+    if(btn) btn.textContent = dark ? "日间模式" : "夜间模式";
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  }
+
+  function nf(v){const n=Number(v);return Number.isFinite(n)?n.toLocaleString():"-";}
+  function tf(v){if(v===null||v===undefined)return "-";const s=String(v).trim();return s? s : "-";}
+  function isBlank(v){return v===null||v===undefined||String(v).trim()===""||String(v).trim()==="-";}
+  function dayToMs(day){
+    if(!day || !/^\d{4}-\d{2}-\d{2}$/.test(String(day))) return NaN;
+    return Date.parse(`${day}T00:00:00Z`);
+  }
+  function dayDiff(a,b){
+    const am = dayToMs(a), bm = dayToMs(b);
+    if(!Number.isFinite(am) || !Number.isFinite(bm)) return NaN;
+    return Math.round((bm-am)/(24*60*60*1000));
+  }
+  function parseTimeMs(v){
+    if(v===null||v===undefined||v==="") return NaN;
+    if(typeof v === "number" && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
+    const s = String(v).trim();
+    if(!s) return NaN;
+    if(/^\d+$/.test(s)){
+      const n = Number(s);
+      if(!Number.isFinite(n)) return NaN;
+      return n < 1e11 ? n * 1000 : n;
+    }
+    const p = Date.parse(s);
+    return Number.isFinite(p) ? p : NaN;
+  }
+  function fmtUtc8(v, dateOnly){
+    const ms = parseTimeMs(v);
+    if(!Number.isFinite(ms)) return tf(v);
+    const d = new Date(ms + 8 * 60 * 60 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth()+1).padStart(2,'0');
+    const day = String(d.getUTCDate()).padStart(2,'0');
+    if(dateOnly) return `${y}-${m}-${day}`;
+    const hh = String(d.getUTCHours()).padStart(2,'0');
+    const mm = String(d.getUTCMinutes()).padStart(2,'0');
+    const ss = String(d.getUTCSeconds()).padStart(2,'0');
+    return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+  }
+  function parseItemsJson(raw){
+    if(raw===null || raw===undefined) return {};
+    if(typeof raw === 'object') return raw || {};
+    const s = String(raw).trim();
+    if(!s) return {};
+    try{
+      const obj = JSON.parse(s);
+      return obj && typeof obj === 'object' ? obj : {};
+    }catch{
+      return {};
+    }
+  }
+  function formatDropItems(raw){
+    const obj = parseItemsJson(raw);
+    const rows = Object.entries(obj)
+      .map(([name,count])=>({name:String(name||'').trim(),count:Number(count||0)}))
+      .filter(x=>x.name && Number.isFinite(x.count) && x.count>0)
+      .sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+    if(rows.length===0) return '-';
+    return `<div class="drop-list">${rows.map(x=>`<div class="drop-item">${x.name} ×${x.count}</div>`).join('')}</div>`;
+  }
+  function mergeDropItemsForView(lRaw, pRaw){
+    const l = parseItemsJson(lRaw);
+    const p = parseItemsJson(pRaw);
+    const entries = [];
+    for(const [name,count] of Object.entries(l)){
+      const n = Number(count||0);
+      const k = String(name||'').trim();
+      if(!k || !Number.isFinite(n) || n<=0) continue;
+      entries.push({name:k,count:n,tag:'L'});
+    }
+    for(const [name,count] of Object.entries(p)){
+      const n = Number(count||0);
+      const k = String(name||'').trim();
+      if(!k || !Number.isFinite(n) || n<=0) continue;
+      entries.push({name:k,count:n,tag:'P'});
+    }
+    if(entries.length===0) return '-';
+    entries.sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+    return `<div class="drop-list">${entries.map(x=>`<div class="drop-item">[${x.tag}] ${x.name} ×${x.count}</div>`).join('')}</div>`;
+  }
+
+  async function api(path){
+    const r = await fetch(path);
+    if(!r.ok) throw new Error("HTTP_"+r.status);
+    return r.json();
+  }
+  async function apiDelete(path){
+    const r = await fetch(path,{method:'DELETE'});
+    if(!r.ok) throw new Error("HTTP_"+r.status);
+    return r.json();
+  }
+
+  function updateCurrentAccountTitle(){
+    const label = selectedAccount || "-";
+    $("pageTitle").textContent = `当前账号：${label}`;
+  }
+
+  function computeWorldStatus(items, world){
+    if(!Array.isArray(items) || items.length===0) return "暂无数据";
+    const key = world === 'main' ? 'main_first_ar_start_time_utc' : 'isekai_first_ar_start_time_utc';
+    const rows = items
+      .map(x=>({date: tf(x.report_date_utc), hasAr: !isBlank(x[key])}))
+      .filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date))
+      .sort((a,b)=> dayToMs(a.date)-dayToMs(b.date));
+    if(rows.length===0) return "暂无数据";
+
+    let latestAbnormalDate = "";
+    for(let i=0;i<rows.length;i++){
+      if(!rows[i].hasAr) latestAbnormalDate = rows[i].date;
+    }
+    if(latestAbnormalDate) return `${latestAbnormalDate} 存在异常`;
+
+    let streak = rows.length>0 && rows[rows.length-1].hasAr ? 1 : 0;
+    for(let i=rows.length-1;i>0 && streak>0;i--){
+      if(dayDiff(rows[i-1].date, rows[i].date)!==1) break;
+      if(!rows[i-1].hasAr) break;
+      streak += 1;
+    }
+    if(streak>=7) return "正常运行";
+    return `观察中（连续${streak}天）`;
+  }
+
+  function renderLatest(account, mainStatus, isekaiStatus){
+    const a = account || {};
+    if(!account){
+      $("mainLatest").innerHTML = `
+        <div class="kv"><div class="k">运行状态</div><div>暂无账号</div></div>
+        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
+        <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
+      `;
+      $("isekaiLatest").innerHTML = `
+        <div class="kv"><div class="k">运行状态</div><div>暂无账号</div></div>
+        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
+        <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
+      `;
+      return;
+    }
+    $("mainLatest").innerHTML = `
+      <div class="kv"><div class="k">账号ID</div><div>${tf(a.account_id)}</div></div>
+      <div class="kv"><div class="k">运行状态</div><div>${tf(mainStatus || "观察中")}</div></div>
+      <div class="kv"><div class="k">最新金额</div><div>${nf(a.market_main_balance)}</div></div>
+      <div class="kv"><div class="k">记录时间(UTC+8)</div><div>${fmtUtc8(a.market_main_saved_at, false)}</div></div>
+      <div class="kv"><div class="k">更新时间(UTC+8)</div><div>${fmtUtc8(a.updated_at, false)}</div></div>
+    `;
+    $("isekaiLatest").innerHTML = `
+      <div class="kv"><div class="k">账号ID</div><div>${tf(a.account_id)}</div></div>
+      <div class="kv"><div class="k">运行状态</div><div>${tf(isekaiStatus || "观察中")}</div></div>
+      <div class="kv"><div class="k">最新金额</div><div>${nf(a.market_isekai_balance)}</div></div>
+      <div class="kv"><div class="k">记录时间(UTC+8)</div><div>${fmtUtc8(a.market_isekai_saved_at, false)}</div></div>
+      <div class="kv"><div class="k">更新时间(UTC+8)</div><div>${fmtUtc8(a.updated_at, false)}</div></div>
+    `;
+  }
+
+  function buildDailyRows(items, world){
+    if(!Array.isArray(items) || items.length===0){
+      return `<tr><td colspan="4" class="empty">暂无数据</td></tr>`;
+    }
+    return items.map(x=>{
+      const rounds = world === 'main' ? x.main_rounds_total : x.isekai_rounds_total;
+      const firstAr = world === 'main' ? x.main_first_ar_start_time_utc : x.isekai_first_ar_start_time_utc;
+      const lItems = world === 'main' ? x.main_legendary_items_json : x.isekai_legendary_items_json;
+      const pItems = world === 'main' ? x.main_peerless_items_json : x.isekai_peerless_items_json;
+      return `<tr>
+        <td>${fmtUtc8(`${tf(x.report_date_utc)}T00:00:00Z`, true)}</td>
+        <td>${nf(rounds)}</td>
+        <td>${fmtUtc8(firstAr, false)}</td>
+        <td>${mergeDropItemsForView(lItems, pItems)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function loadDaily(){
+    if(!selectedAccount){
+      $("mainDailyRows").innerHTML = `<tr><td colspan="4" class="empty">请先选择账号</td></tr>`;
+      $("isekaiDailyRows").innerHTML = `<tr><td colspan="4" class="empty">请先选择账号</td></tr>`;
+      renderLatest(null);
+      return;
+    }
+    const from = $("from").value ? `&from=${encodeURIComponent($("from").value)}` : "";
+    const to = $("to").value ? `&to=${encodeURIComponent($("to").value)}` : "";
+    const data = await api(`/api/v1/admin/account/${encodeURIComponent(selectedAccount)}/daily?1=1${from}${to}`);
+    const items = data.items || [];
+    const acc = accounts.find(x=>String(x.account_id)===selectedAccount) || null;
+    const mainStatus = computeWorldStatus(items, 'main');
+    const isekaiStatus = computeWorldStatus(items, 'isekai');
+    renderLatest(acc, mainStatus, isekaiStatus);
+    $("mainDailyRows").innerHTML = buildDailyRows(items, 'main');
+    $("isekaiDailyRows").innerHTML = buildDailyRows(items, 'isekai');
+  }
+
+  function renderAccountGrid(){
+    const html = accounts.map(a=>{
+      const id = tf(a.account_id);
+      const active = a.account_id === selectedAccount ? "active" : "";
+      return `<div class="account-chip ${active}" data-id="${String(id).replace(/"/g, '&quot;')}">
+        <div class="id">${id}</div>
+        <div class="money">主: ${nf(a.market_main_balance)}</div>
+        <div class="money">异: ${nf(a.market_isekai_balance)}</div>
+      </div>`;
+    }).join('');
+    $("accountGrid").innerHTML = html || `<div class="empty">暂无账号数据</div>`;
+    Array.from(document.querySelectorAll('.account-chip')).forEach(node=>{
+      node.addEventListener('click',()=>{
+        selectedAccount = node.getAttribute('data-id') || '';
+        updateCurrentAccountTitle();
+        renderAccountGrid();
+        const acc = accounts.find(x=>String(x.account_id)===selectedAccount);
+        renderLatest(acc, "加载中", "加载中");
+        loadDaily().catch(e=>alert('加载失败: '+e.message));
+      });
+    });
+  }
+
+  async function loadAccounts(){
+    const data = await api('/api/v1/admin/accounts');
+    accounts = Array.isArray(data.items) ? data.items : [];
+    if(!selectedAccount && accounts.length>0){
+      selectedAccount = String(accounts[0].account_id || '');
+    }
+    if(accounts.length===0) selectedAccount = "";
+    updateCurrentAccountTitle();
+    renderAccountGrid();
+    const acc = accounts.find(x=>String(x.account_id)===selectedAccount) || accounts[0] || null;
+    renderLatest(acc, acc ? "加载中" : "暂无数据", acc ? "加载中" : "暂无数据");
+  }
+
+  $("reloadAccounts").addEventListener('click',()=>{
+    loadAccounts().then(loadDaily).catch(e=>alert('加载失败: '+e.message));
+  });
+  $("themeToggle").addEventListener('click',()=>{
+    const next = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+    applyTheme(next);
+  });
+  $("reloadDaily").addEventListener('click',()=>{
+    loadDaily().catch(e=>alert('加载失败: '+e.message));
+  });
+  $("deleteAccount").addEventListener('click',()=>{
+    if(!selectedAccount){
+      alert('请先选择账号');
+      return;
+    }
+    const ok = confirm(`确认删除账号 ${selectedAccount} 的全部数据？此操作不可恢复。`);
+    if(!ok) return;
+    apiDelete(`/api/v1/admin/account/${encodeURIComponent(selectedAccount)}`)
+      .then(()=>{
+        const deleted = selectedAccount;
+        selectedAccount = '';
+        alert(`已删除账号 ${deleted} 的全部数据`);
+        return loadAccounts().then(loadDaily);
+      })
+      .catch(e=>alert('删号失败: '+e.message));
+  });
+
+  applyTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light');
+  updateCurrentAccountTitle();
+  renderLatest(null);
+  loadDaily();
+  loadAccounts().then(loadDaily).catch(e=>alert('初始化失败: '+e.message));
+</script>
+</body>
+</html>

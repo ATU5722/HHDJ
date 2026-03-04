@@ -307,15 +307,21 @@
     if(!Array.isArray(items) || items.length===0) return "暂无数据";
     const key = world === 'main' ? 'main_first_ar_start_time_utc' : 'isekai_first_ar_start_time_utc';
     const rows = items
-      .map(x=>({date: tf(x.report_date_utc), hasAr: !isBlank(x[key])}))
+      .map(x=>({date: tf(x.report_date_utc), receivedAt: x.received_at, hasAr: !isBlank(x[key])}))
       .filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date))
       .sort((a,b)=> dayToMs(b.date)-dayToMs(a.date));
     if(rows.length===0) return "暂无数据";
 
-    const latestDate = rows[0].date;
-    const nowDateUtc8 = currentDayUtc8();
-    const lag = dayDiff(latestDate, nowDateUtc8);
-    if(Number.isFinite(lag) && lag >= 1){
+    if(!rows[0].hasAr){
+      return "存在异常";
+    }
+
+    const latestReceivedMs = parseTimeMs(rows[0].receivedAt);
+    if(!Number.isFinite(latestReceivedMs)){
+      return "存在异常";
+    }
+    const staleBy24h = Date.now() - latestReceivedMs > 24 * 60 * 60 * 1000;
+    if(staleBy24h){
       return "存在异常";
     }
 

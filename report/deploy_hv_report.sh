@@ -52,7 +52,12 @@ copy_files() {
 }
 
 build_server() {
-  (cd "$SRC_DIR" && /usr/bin/go mod download && /usr/bin/go build -ldflags="-s -w" -o "$BIN_DIR/hv-report" ./cmd/server)
+  (
+    cd "$SRC_DIR" && \
+    GOFLAGS='-mod=mod' /usr/bin/go mod tidy && \
+    GOFLAGS='-mod=mod' /usr/bin/go mod download && \
+    GOFLAGS='-mod=mod' /usr/bin/go build -ldflags="-s -w" -o "$BIN_DIR/hv-report" ./cmd/server
+  )
   chmod 755 "$BIN_DIR/hv-report"
 }
 

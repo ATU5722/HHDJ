@@ -10,6 +10,8 @@ WEB_DIR="$APP_DIR/web"
 DATA_DIR="$APP_DIR/data"
 SRC_DIR="$APP_DIR/src"
 SERVICE_FILE="/etc/systemd/system/hv-report.service"
+NGINX_SITE="/etc/nginx/sites-available/hv-report-domain"
+NGINX_LINK="/etc/nginx/sites-enabled/hv-report-domain"
 
 DOMAIN="report.6950695.xyz"
 LOCAL_PORT="18080"
@@ -37,7 +39,7 @@ require_root() {
 
 install_deps() {
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget tar ca-certificates curl gnupg
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget tar ca-certificates curl gnupg nginx certbot python3-certbot-nginx
 }
 
 go_version_value() {
@@ -75,18 +77,6 @@ EOF
   fi
 
   "$GO_BIN" version
-}
-
-install_caddy() {
-  if command -v caddy >/dev/null 2>&1; then
-    return
-  fi
-  apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends caddy
 }
 
 create_layout() {
@@ -150,21 +140,37 @@ WantedBy=multi-user.target
 EOF
 }
 
-write_caddy() {
-  cat > /etc/caddy/Caddyfile <<EOF
-$DOMAIN {
-    encode gzip
-    reverse_proxy 127.0.0.1:$LOCAL_PORT
+write_nginx_site() {
+  cat > "$NGINX_SITE" <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+
+    location / {
+        proxy_pass http://127.0.0.1:$LOCAL_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
 }
 EOF
+  ln -sf "$NGINX_SITE" "$NGINX_LINK"
+  nginx -t
+}
+
+enable_https() {
+  certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d "$DOMAIN" --redirect || true
 }
 
 restart_services() {
   systemctl daemon-reload
   systemctl enable hv-report.service
   systemctl restart hv-report.service
-  systemctl enable caddy
-  systemctl restart caddy
+  systemctl enable nginx
+  systemctl restart nginx
 }
 
 show_result() {
@@ -192,14 +198,15 @@ main() {
   fi
   install_deps
   ensure_go
-  install_caddy
   create_layout
   copy_files
   build_server
   write_env
   write_service
-  write_caddy
+  write_nginx_site
   restart_services
+  enable_https
+  systemctl restart nginx
   show_result
 }
 

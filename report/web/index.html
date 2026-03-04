@@ -21,37 +21,40 @@
       --th-bg:#f6f9fd;
     }
     *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,var(--bg-a) 0%,var(--bg-b) 100%);color:var(--text);font:14px/1.5 "Segoe UI",Tahoma,sans-serif;transition:background .25s,color .25s}
+    body{margin:0;background:linear-gradient(180deg,var(--bg-a) 0%,var(--bg-b) 100%);color:var(--text);font:16px/1.55 "Segoe UI",Tahoma,sans-serif;transition:background .25s,color .25s}
     .wrap{max-width:1680px;margin:0 auto;padding:20px 24px}
     .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
     .title{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
-    h1{margin:0;font-size:20px;color:#16324f;letter-spacing:.2px}
+    h1{margin:0;font-size:24px;color:#16324f;letter-spacing:.2px}
     .muted{color:var(--muted)}
     .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .toolbar input,.toolbar button{height:34px;padding:0 10px;border:1px solid var(--chip-border);border-radius:8px;background:#fff;color:var(--text)}
+    .toolbar input,.toolbar button{height:38px;padding:0 12px;border:1px solid var(--chip-border);border-radius:8px;background:#fff;color:var(--text);font-size:15px}
     .toolbar button{background:var(--brand);border-color:var(--brand);color:#fff;cursor:pointer}
+    .toolbar button.secondary{background:#f3f7fc;color:#2e435c;border-color:#c9d6e6}
     .toolbar-spacer{flex:1 1 auto}
     .account-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
     .account-chip{border:1px solid var(--chip-border);border-radius:10px;padding:10px;background:var(--chip);cursor:pointer}
     .account-chip.active{border-color:#2b5f95;background:var(--chip-active)}
     .account-chip .id{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .account-chip .money{margin-top:4px;font-size:12px;color:var(--muted)}
+    .account-chip .money{margin-top:4px;font-size:14px;color:var(--muted)}
     .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .section-title{margin:0 0 10px 0;font-size:16px;color:#16324f}
+    .section-title{margin:0 0 10px 0;font-size:19px;color:#16324f}
     .kv{display:grid;grid-template-columns:120px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line-soft)}
     .kv:last-child{border-bottom:none}
     .kv .k{color:var(--muted)}
     .table-wrap{overflow-x:auto}
     table{width:100%;border-collapse:collapse;min-width:980px}
-    th,td{padding:8px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:13px}
+    th,td{padding:10px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:15px}
     th{color:#334155;background:var(--th-bg)}
     th:nth-child(1),td:nth-child(1){width:120px;white-space:nowrap}
     th:nth-child(2),td:nth-child(2){width:88px;white-space:nowrap}
     th:nth-child(3),td:nth-child(3){width:170px;white-space:nowrap}
     th:nth-child(4),td:nth-child(4){width:auto}
-    .empty{padding:16px;text-align:center;color:#7b8794}
+    .empty{padding:16px;text-align:center;color:#7b8794;font-size:16px}
     .drop-list{display:flex;flex-direction:column;gap:4px}
     .drop-item{white-space:nowrap}
+    .drop-item.named-l{color:#1f7a42;background:rgba(31,122,66,.12);border:1px solid rgba(31,122,66,.3);padding:2px 6px;border-radius:6px;font-weight:600;display:inline-block;width:fit-content}
+    .drop-item.named-p{color:#9a2d34;background:rgba(154,45,52,.12);border:1px solid rgba(154,45,52,.32);padding:2px 6px;border-radius:6px;font-weight:600;display:inline-block;width:fit-content}
     .danger{background:#7f1d1d !important;border-color:#7f1d1d !important}
     .theme-btn{min-width:94px}
 
@@ -72,7 +75,10 @@
     }
     body.theme-dark h1{color:#b8d5f7}
     body.theme-dark .toolbar input{background:#111a28;color:var(--text)}
+    body.theme-dark .toolbar button.secondary{background:#1a2638;color:#c9d9ee;border-color:#30445f}
     body.theme-dark .empty{color:#93a8c1}
+    body.theme-dark .drop-item.named-l{color:#7ee2a6;background:rgba(34,122,76,.28);border-color:rgba(126,226,166,.45)}
+    body.theme-dark .drop-item.named-p{color:#ff9ea4;background:rgba(131,42,52,.3);border-color:rgba(255,158,164,.45)}
     @media (max-width:980px){.split{grid-template-columns:1fr}}
   </style>
 </head>
@@ -88,11 +94,12 @@
 
   <div class="panel">
     <div class="toolbar">
-      <button id="reloadAccounts">加载全部账号</button>
+      <button id="reloadAccounts">重新加载</button>
       <button id="themeToggle" class="theme-btn">夜间模式</button>
+      <button id="filterNamed" class="secondary">仅看对名：关</button>
       <label>从</label><input id="from" type="date">
       <label>到</label><input id="to" type="date">
-      <button id="reloadDaily">刷新当前账号</button>
+      <button id="reloadDaily">应用</button>
       <span class="toolbar-spacer"></span>
       <button id="deleteAccount" class="danger">删号</button>
     </div>
@@ -109,7 +116,7 @@
       </div>
       <div class="table-wrap"><table>
         <thead>
-          <tr><th>日期</th><th>Rounds</th><th>最早AR</th><th>装备</th></tr>
+          <tr><th>日期</th><th>层数</th><th>最早AR</th><th>装备</th></tr>
         </thead>
         <tbody id="mainDailyRows"></tbody>
       </table></div>
@@ -125,7 +132,7 @@
       </div>
       <div class="table-wrap"><table>
         <thead>
-          <tr><th>日期</th><th>Rounds</th><th>最早AR</th><th>装备</th></tr>
+          <tr><th>日期</th><th>层数</th><th>最早AR</th><th>装备</th></tr>
         </thead>
         <tbody id="isekaiDailyRows"></tbody>
       </table></div>
@@ -136,8 +143,10 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const THEME_KEY = "hv_report_theme_mode";
+  const NAMED_ONLY_KEY = "hv_report_named_only";
   let accounts = [];
   let selectedAccount = "";
+  let namedOnly = false;
 
   function applyTheme(mode){
     const dark = mode === "dark";
@@ -145,6 +154,12 @@
     const btn = $("themeToggle");
     if(btn) btn.textContent = dark ? "日间模式" : "夜间模式";
     localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  }
+  function applyNamedOnly(enabled){
+    namedOnly = !!enabled;
+    const btn = $("filterNamed");
+    if(btn) btn.textContent = namedOnly ? "仅看对名：开" : "仅看对名：关";
+    localStorage.setItem(NAMED_ONLY_KEY, namedOnly ? "1" : "0");
   }
 
   function nf(v){const n=Number(v);return Number.isFinite(n)?n.toLocaleString():"-";}
@@ -158,6 +173,9 @@
     const am = dayToMs(a), bm = dayToMs(b);
     if(!Number.isFinite(am) || !Number.isFinite(bm)) return NaN;
     return Math.round((bm-am)/(24*60*60*1000));
+  }
+  function currentDayUtc8(){
+    return fmtUtc8(Date.now(), true);
   }
   function parseTimeMs(v){
     if(v===null||v===undefined||v==="") return NaN;
@@ -197,6 +215,41 @@
       return {};
     }
   }
+  const NAMED_EQUIP_RULES = [
+    ['rapier','slaughter'],
+    ['wakizashi','battlecaster'],
+    [['buckler','Kite','Tower'],['barrier','battlecaster']],
+    [['fiery','arctic','shocking','tempestuous','demonic'],'willow','destruction'],
+    [['hallowed','fiery','arctic'],'oak',['focus','heimdall','destruction']],
+    [['radiant','charged'],'phase'],
+    [['charged','radiant'],['elementalist','heaven-sent','demon-fiend']],
+    ['reinforced','leather','protection'],
+    [['savage','agile'],'shadowdancer'],
+    ['Reactive','Barrier'],
+    ['power',['slaughter','Balance']]
+  ];
+  function equipTokens(name){
+    return new Set(String(name||'').toLowerCase().match(/[a-z-]+/g) || []);
+  }
+  function matchNamedRule(tokens, rule){
+    for(const segment of rule){
+      if(Array.isArray(segment)){
+        let ok = false;
+        for(const alt of segment){
+          if(tokens.has(String(alt).toLowerCase())){ ok = true; break; }
+        }
+        if(!ok) return false;
+      } else {
+        if(!tokens.has(String(segment).toLowerCase())) return false;
+      }
+    }
+    return true;
+  }
+  function isNamedEquip(name){
+    const tokens = equipTokens(name);
+    if(tokens.size===0) return false;
+    return NAMED_EQUIP_RULES.some(rule => matchNamedRule(tokens, rule));
+  }
   function formatDropItems(raw){
     const obj = parseItemsJson(raw);
     const rows = Object.entries(obj)
@@ -214,17 +267,24 @@
       const n = Number(count||0);
       const k = String(name||'').trim();
       if(!k || !Number.isFinite(n) || n<=0) continue;
-      entries.push({name:k,count:n,tag:'L'});
+      entries.push({name:k,count:n,source:'L'});
     }
     for(const [name,count] of Object.entries(p)){
       const n = Number(count||0);
       const k = String(name||'').trim();
       if(!k || !Number.isFinite(n) || n<=0) continue;
-      entries.push({name:k,count:n,tag:'P'});
+      entries.push({name:k,count:n,source:'P'});
     }
-    if(entries.length===0) return '-';
+    if(entries.length===0) return { html:'-', hasNamed:false };
     entries.sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
-    return `<div class="drop-list">${entries.map(x=>`<div class="drop-item">[${x.tag}] ${x.name} ×${x.count}</div>`).join('')}</div>`;
+    let hasNamed = false;
+    const html = `<div class="drop-list">${entries.map(x=>{
+      const named = isNamedEquip(x.name);
+      if(named) hasNamed = true;
+      const cls = named ? (x.source === 'P' ? 'named-p' : 'named-l') : '';
+      return `<div class="drop-item ${cls}">${x.name} ×${x.count}</div>`;
+    }).join('')}</div>`;
+    return { html, hasNamed };
   }
 
   async function api(path){
@@ -249,23 +309,22 @@
     const rows = items
       .map(x=>({date: tf(x.report_date_utc), hasAr: !isBlank(x[key])}))
       .filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x.date))
-      .sort((a,b)=> dayToMs(a.date)-dayToMs(b.date));
+      .sort((a,b)=> dayToMs(b.date)-dayToMs(a.date));
     if(rows.length===0) return "暂无数据";
 
-    let latestAbnormalDate = "";
-    for(let i=0;i<rows.length;i++){
-      if(!rows[i].hasAr) latestAbnormalDate = rows[i].date;
+    const latestDate = rows[0].date;
+    const nowDateUtc8 = currentDayUtc8();
+    const lag = dayDiff(latestDate, nowDateUtc8);
+    if(Number.isFinite(lag) && lag >= 1){
+      return "存在异常";
     }
-    if(latestAbnormalDate) return `${latestAbnormalDate} 存在异常`;
 
-    let streak = rows.length>0 && rows[rows.length-1].hasAr ? 1 : 0;
-    for(let i=rows.length-1;i>0 && streak>0;i--){
-      if(dayDiff(rows[i-1].date, rows[i].date)!==1) break;
-      if(!rows[i-1].hasAr) break;
+    let streak = 0;
+    for(let i=0;i<rows.length;i++){
+      if(!rows[i].hasAr) break;
       streak += 1;
     }
-    if(streak>=7) return "正常运行";
-    return `观察中（连续${streak}天）`;
+    return `正常运行${streak}天`;
   }
 
   function renderLatest(account, mainStatus, isekaiStatus){
@@ -273,13 +332,13 @@
     if(!account){
       $("mainLatest").innerHTML = `
         <div class="kv"><div class="k">运行状态</div><div>暂无账号</div></div>
-        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">Credits</div><div>-</div></div>
         <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
         <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
       `;
       $("isekaiLatest").innerHTML = `
         <div class="kv"><div class="k">运行状态</div><div>暂无账号</div></div>
-        <div class="kv"><div class="k">最新金额</div><div>-</div></div>
+        <div class="kv"><div class="k">Credits</div><div>-</div></div>
         <div class="kv"><div class="k">记录时间(UTC+8)</div><div>-</div></div>
         <div class="kv"><div class="k">更新时间(UTC+8)</div><div>-</div></div>
       `;
@@ -288,14 +347,14 @@
     $("mainLatest").innerHTML = `
       <div class="kv"><div class="k">账号ID</div><div>${tf(a.account_id)}</div></div>
       <div class="kv"><div class="k">运行状态</div><div>${tf(mainStatus || "观察中")}</div></div>
-      <div class="kv"><div class="k">最新金额</div><div>${nf(a.market_main_balance)}</div></div>
+      <div class="kv"><div class="k">Credits</div><div>${nf(a.market_main_balance)}</div></div>
       <div class="kv"><div class="k">记录时间(UTC+8)</div><div>${fmtUtc8(a.market_main_saved_at, false)}</div></div>
       <div class="kv"><div class="k">更新时间(UTC+8)</div><div>${fmtUtc8(a.updated_at, false)}</div></div>
     `;
     $("isekaiLatest").innerHTML = `
       <div class="kv"><div class="k">账号ID</div><div>${tf(a.account_id)}</div></div>
       <div class="kv"><div class="k">运行状态</div><div>${tf(isekaiStatus || "观察中")}</div></div>
-      <div class="kv"><div class="k">最新金额</div><div>${nf(a.market_isekai_balance)}</div></div>
+      <div class="kv"><div class="k">Credits</div><div>${nf(a.market_isekai_balance)}</div></div>
       <div class="kv"><div class="k">记录时间(UTC+8)</div><div>${fmtUtc8(a.market_isekai_saved_at, false)}</div></div>
       <div class="kv"><div class="k">更新时间(UTC+8)</div><div>${fmtUtc8(a.updated_at, false)}</div></div>
     `;
@@ -305,18 +364,21 @@
     if(!Array.isArray(items) || items.length===0){
       return `<tr><td colspan="4" class="empty">暂无数据</td></tr>`;
     }
-    return items.map(x=>{
+    const rows = items.map(x=>{
       const rounds = world === 'main' ? x.main_rounds_total : x.isekai_rounds_total;
       const firstAr = world === 'main' ? x.main_first_ar_start_time_utc : x.isekai_first_ar_start_time_utc;
       const lItems = world === 'main' ? x.main_legendary_items_json : x.isekai_legendary_items_json;
       const pItems = world === 'main' ? x.main_peerless_items_json : x.isekai_peerless_items_json;
+      const merged = mergeDropItemsForView(lItems, pItems);
+      if(namedOnly && !merged.hasNamed) return "";
       return `<tr>
         <td>${fmtUtc8(`${tf(x.report_date_utc)}T00:00:00Z`, true)}</td>
         <td>${nf(rounds)}</td>
         <td>${fmtUtc8(firstAr, false)}</td>
-        <td>${mergeDropItemsForView(lItems, pItems)}</td>
+        <td>${merged.html}</td>
       </tr>`;
-    }).join('');
+    }).filter(Boolean).join('');
+    return rows || `<tr><td colspan="4" class="empty">筛选后暂无数据</td></tr>`;
   }
 
   async function loadDaily(){
@@ -381,6 +443,10 @@
     const next = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
     applyTheme(next);
   });
+  $("filterNamed").addEventListener('click',()=>{
+    applyNamedOnly(!namedOnly);
+    loadDaily().catch(e=>alert('加载失败: '+e.message));
+  });
   $("reloadDaily").addEventListener('click',()=>{
     loadDaily().catch(e=>alert('加载失败: '+e.message));
   });
@@ -402,6 +468,7 @@
   });
 
   applyTheme(localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light');
+  applyNamedOnly(localStorage.getItem(NAMED_ONLY_KEY) === '1');
   updateCurrentAccountTitle();
   renderLatest(null);
   loadDaily();

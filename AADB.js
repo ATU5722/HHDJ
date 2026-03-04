@@ -28,11 +28,11 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 25, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 200, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 400, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 30, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
-  GIFT_MIN_HOURS: 24,              // 自动收礼最小间隔小时
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
+  GIFT_MIN_HOURS: 48,              // 自动收礼最小间隔小时
   GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
@@ -55,7 +55,7 @@ const IW_TASK_STATUS_LABELS = Object.freeze({
 // 统计计算相关的数值字段定义
 const STATISTICS_NUMERIC_FIELDS = [
   'rounds', 'turns', 'exp', 'credit', 'revenue', 'cost', 'profit', 'profit_without_ed',
-  'artifacts', 'blood', 'chaos', 'legendary', 'peerless', 'potions', 'scrolls', 'gems', 'horse', 'spark',
+  'artifacts', 'blood', 'chaos', 'legendary', 'peerless', 'potions', 'scrolls', 'gems', 'others', 'horse', 'spark',
   'potion_net_income', 'scroll_net_income', 'attack_spells', 'support_spells', 'heal_spells', 'debuff_spells'
 ];
 
@@ -90,6 +90,7 @@ const dbTableColumnsAll = {
     { column_name: '药水', field: 'potions', tooltip: 'potion_details', id: 'col_potions', default: false },
     { column_name: '卷轴', field: 'scrolls', tooltip: 'scroll_details', id: 'col_scrolls', default: false },
     { column_name: '宝石', field: 'gems', tooltip: 'gem_details', id: 'col_gems', default: false },
+    { column_name: '其他', field: 'others', tooltip: 'other_details', id: 'col_others', default: false },
     { column_name: '药水净收入', field: 'potion_net_income', tooltip: 'potion_net_details', id: 'col_potion_net', default: false },
     { column_name: '卷轴净收入', field: 'scroll_net_income', tooltip: 'scroll_net_details', id: 'col_scroll_net', default: false }
   ],
@@ -128,7 +129,10 @@ const ITEM_LISTS = {
             'Health Draught', 'Mana Draught', 'Spirit Draught', 'Last Elixir'],
   SCROLLS: ['Scroll of the Gods', 'Scroll of the Avatar', 'Scroll of Protection',
             'Scroll of Swiftness', 'Scroll of Life', 'Scroll of Shadows', 'Scroll of Absorption'],
-  GEMS: ['Health Gem', 'Mana Gem', 'Spirit Gem', 'Mystic Gem']
+  GEMS: ['Health Gem', 'Mana Gem', 'Spirit Gem', 'Mystic Gem'],
+  OTHERS: ['Flower Vase', 'Bubble-Gum',
+           'Infusion of Flames', 'Infusion of Frost', 'Infusion of Lightning',
+           'Infusion of Storms', 'Infusion of Divinity', 'Infusion of Darkness']
 };
 
 // 可释放目录（技能/物品）
@@ -846,6 +850,7 @@ const AAD = {
           potions: flatData.potions,
           scrolls: flatData.scrolls,
           gems: flatData.gems,
+          others: flatData.others,
           potionNetIncome: flatData.potionNetIncome,
           scrollNetIncome: flatData.scrollNetIncome,
 
@@ -935,6 +940,7 @@ const AAD = {
           potions: batchStats.potions,
           scrolls: batchStats.scrolls,
           gems: batchStats.gems,
+          others: batchStats.others,
           potionNetIncome,
           scrollNetIncome,
           attackSpells: batchStats.attack_spells,
@@ -1060,7 +1066,7 @@ const AAD = {
           exp: 0, credit: 0, revenue: 0, cost: 0, profit: 0,
           profit_without_ed: 0,
           artifacts: 0, blood: 0, chaos: 0, legendary: 0, peerless: 0,
-          potions: 0, scrolls: 0, gems: 0,
+          potions: 0, scrolls: 0, gems: 0, others: 0,
           potion_net_income: 0, scroll_net_income: 0,
           attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
           horse: 0, spark: 0, battleCount: 0, seconds: 0,
@@ -1085,6 +1091,7 @@ const AAD = {
           daily.potions += record.potions || 0;
           daily.scrolls += record.scrolls || 0;
           daily.gems += record.gems || 0;
+          daily.others += record.others || 0;
           daily.potion_net_income += record.potionNetIncome || 0;
           daily.scroll_net_income += record.scrollNetIncome || 0;
           daily.attack_spells += record.attackSpells || 0;
@@ -5404,6 +5411,7 @@ const AAD = {
           potions: flatData.potions,
           scrolls: flatData.scrolls,
           gems: flatData.gems,
+          others: flatData.others,
 
           // 技能统计（已预计算）
           attack_spells: flatData.attackSpells,
@@ -5433,6 +5441,7 @@ const AAD = {
           potions: 0,
           scrolls: 0,
           gems: 0,
+          others: 0,
           attack_spells: 0,
           support_spells: 0,
           heal_spells: 0,
@@ -5444,6 +5453,7 @@ const AAD = {
         result.potions = ItemStatsUtil.countItems(combat, ITEM_LISTS.POTIONS);
         result.scrolls = ItemStatsUtil.countItems(combat, ITEM_LISTS.SCROLLS);
         result.gems = ItemStatsUtil.countItems(combat, ITEM_LISTS.GEMS);
+        result.others = ItemStatsUtil.countItems(combat, ITEM_LISTS.OTHERS);
 
         // 技能统计（如果有魔法数据）
         if (combat.magic) {
@@ -5633,7 +5643,7 @@ const AAD = {
           exp: 0, credit: 0, revenue: 0, cost: 0, profit: 0,
           profit_without_ed: 0,
           artifacts: 0, blood: 0, chaos: 0, legendary: 0, peerless: 0,
-          potions: 0, scrolls: 0, gems: 0,
+          potions: 0, scrolls: 0, gems: 0, others: 0,
           potion_net_income: 0, scroll_net_income: 0,
           attack_spells: 0, support_spells: 0, heal_spells: 0, debuff_spells: 0,
           horse: 0, spark: 0, battleCount: 0, seconds: 0,
@@ -8187,6 +8197,12 @@ const AAD = {
           case 'gem_details':
             if (combatData.items) {
               content.push(...ItemStatsUtil.getItemDetails(combatData, ITEM_LISTS.GEMS));
+            }
+            break;
+
+          case 'other_details':
+            if (combatData.items) {
+              content.push(...ItemStatsUtil.getItemDetails(combatData, ITEM_LISTS.OTHERS));
             }
             break;
 

@@ -20,6 +20,10 @@ API_KEY="hvtb_report_signing_key_v1_2026_03_04"
 SIG_WINDOW_SEC="300"
 ADMIN_TOKEN=""
 SERVER_IP="192.3.253.227"
+GO_VERSION="1.22.12"
+GO_TGZ="go${GO_VERSION}.linux-amd64.tar.gz"
+GO_URL="https://go.dev/dl/${GO_TGZ}"
+GO_BIN="/usr/local/go/bin/go"
 
 if [[ "${1:-}" == "--with-token" ]]; then
   ADMIN_TOKEN="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24 || true)"
@@ -34,7 +38,53 @@ require_root() {
 
 install_deps() {
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends golang-go nginx ca-certificates
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wget tar nginx ca-certificates
+}
+
+go_version_value() {
+  local v="$1"
+  # 1.22.12 -> 001022012
+  local a b c
+  IFS='.' read -r a b c <<< "$v"
+  a="${a:-0}"
+  b="${b:-0}"
+  c="${c:-0}"
+  printf "%03d%03d%03d" "$a" "$b" "$c"
+}
+
+ensure_go() {
+  local current=""
+  if [[ -x "$GO_BIN" ]]; then
+    current="$($GO_BIN version | awk '{print $3}' | sed 's/^go//')"
+  elif command -v go >/dev/null 2>&1; then
+    current="$(go version | awk '{print $3}' | sed 's/^go//')"
+  fi
+
+  local need_install=1
+  if [[ -n "$current" ]]; then
+    if [[ "$(go_version_value "$current")" -ge "$(go_version_value "$GO_VERSION")" ]]; then
+      need_install=0
+    fi
+  fi
+
+  if [[ "$need_install" -eq 1 ]]; then
+    echo "Installing Go ${GO_VERSION} ..."
+    cd /tmp
+    rm -f "$GO_TGZ"
+    wget -q "$GO_URL" -O "$GO_TGZ"
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "$GO_TGZ"
+    cat > /etc/profile.d/go.sh <<'EOF'
+export PATH=/usr/local/go/bin:$PATH
+EOF
+    chmod 644 /etc/profile.d/go.sh
+  fi
+
+  if [[ ! -x "$GO_BIN" ]]; then
+    echo "Go install failed: $GO_BIN not found"
+    exit 1
+  fi
+  "$GO_BIN" version
 }
 
 create_layout() {
@@ -54,9 +104,9 @@ copy_files() {
 build_server() {
   (
     cd "$SRC_DIR" && \
-    GOFLAGS='-mod=mod' /usr/bin/go mod tidy && \
-    GOFLAGS='-mod=mod' /usr/bin/go mod download && \
-    GOFLAGS='-mod=mod' /usr/bin/go build -ldflags="-s -w" -o "$BIN_DIR/hv-report" ./cmd/server
+    GOFLAGS='-mod=mod' "$GO_BIN" mod tidy && \
+    GOFLAGS='-mod=mod' "$GO_BIN" mod download && \
+    GOFLAGS='-mod=mod' "$GO_BIN" build -ldflags="-s -w" -o "$BIN_DIR/hv-report" ./cmd/server
   )
   chmod 755 "$BIN_DIR/hv-report"
 }
@@ -158,6 +208,7 @@ main() {
     exit 1
   fi
   install_deps
+  ensure_go
   create_layout
   copy_files
   build_server

@@ -1580,6 +1580,18 @@
     return new Date(value).toISOString().replace(".000Z", "Z");
   }
 
+  function formatRecordedTimeUtc8(value) {
+    if (!Number.isFinite(value) || value <= 0) return "-";
+    const d = new Date(value + 8 * 60 * 60 * 1000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    const hh = String(d.getUTCHours()).padStart(2, "0");
+    const mm = String(d.getUTCMinutes()).padStart(2, "0");
+    const ss = String(d.getUTCSeconds()).padStart(2, "0");
+    return `${y}-${m}-${day} ${hh}:${mm}:${ss} UTC+8`;
+  }
+
   function formatUtcDate(ms) {
     const d = new Date(ms);
     const y = d.getUTCFullYear();
@@ -1588,15 +1600,9 @@
     return `${y}-${m}-${day}`;
   }
 
-  function buildNextReportTimeUtc22(nowMs) {
+  function buildYesterdayUtcDate(nowMs) {
     const now = Number.isFinite(nowMs) ? nowMs : Date.now();
-    const d = new Date(now);
-    const y = d.getUTCFullYear();
-    const m = d.getUTCMonth();
-    const day = d.getUTCDate();
-    const today2200 = Date.UTC(y, m, day, 22, 0, 0, 0);
-    if (now < today2200) return today2200;
-    return Date.UTC(y, m, day + 1, 22, 0, 0, 0);
+    return formatUtcDate(now - 24 * 60 * 60 * 1000);
   }
 
   function computeReportRetryDelayMs(retryCount) {
@@ -2998,12 +3004,12 @@
       return {
         reportEnabled: !!st.reportEnabled,
         accountId: typeof st.accountId === "string" ? st.accountId.trim() : "",
-        nextReportAt: Number.isFinite(st.nextReportAt) ? Number(st.nextReportAt) : buildNextReportTimeUtc22(Date.now()),
         pendingDateUtc: typeof st.pendingDateUtc === "string" ? st.pendingDateUtc : "",
         retryAt: Number.isFinite(st.retryAt) ? Number(st.retryAt) : 0,
         retryCount: Number.isFinite(st.retryCount) ? Number(st.retryCount) : 0,
         lastReportDateUtc: typeof st.lastReportDateUtc === "string" ? st.lastReportDateUtc : "",
         lastGiveUpDateUtc: typeof st.lastGiveUpDateUtc === "string" ? st.lastGiveUpDateUtc : "",
+        lastAutoTriggerUtc: typeof st.lastAutoTriggerUtc === "string" ? st.lastAutoTriggerUtc : "",
         lastReportAt: Number.isFinite(st.lastReportAt) ? Number(st.lastReportAt) : 0,
         lastReportError: typeof st.lastReportError === "string" ? st.lastReportError : ""
       };
@@ -3039,18 +3045,16 @@
       let changed = false;
       const now = Date.now();
       const todayUtc = formatUtcDate(now);
+      const yesterdayUtc = buildYesterdayUtcDate(now);
 
-      if (!Number.isFinite(st.nextReportAt) || st.nextReportAt <= 0) {
-        st.nextReportAt = buildNextReportTimeUtc22(now);
+      if (st.lastAutoTriggerUtc !== todayUtc) {
+        st.lastAutoTriggerUtc = todayUtc;
         changed = true;
-      }
-
-      if (!st.pendingDateUtc && now >= st.nextReportAt && st.lastReportDateUtc !== todayUtc && st.lastGiveUpDateUtc !== todayUtc) {
-        st.pendingDateUtc = todayUtc;
-        st.nextReportAt = buildNextReportTimeUtc22(now + 1000);
-        st.retryAt = 0;
-        st.retryCount = 0;
-        changed = true;
+        if (!st.pendingDateUtc && st.lastReportDateUtc !== yesterdayUtc && st.lastGiveUpDateUtc !== yesterdayUtc) {
+          st.pendingDateUtc = yesterdayUtc;
+          st.retryAt = 0;
+          st.retryCount = 0;
+        }
       }
 
       if (changed) ctx.store.write(st);
@@ -3071,7 +3075,6 @@
           st.pendingDateUtc = "";
           st.retryAt = 0;
           st.retryCount = 0;
-          st.nextReportAt = buildNextReportTimeUtc22(now + 1000);
           ctx.store.write(st);
           ctx.refreshUi();
           return;
@@ -3085,7 +3088,6 @@
             st.pendingDateUtc = "";
             st.retryAt = 0;
             st.retryCount = 0;
-            st.nextReportAt = buildNextReportTimeUtc22(now + 1000);
             st.lastReportError = "缺少汇报配置(已达重试上限)";
             ctx.store.write(st);
             ctx.refreshUi();
@@ -3143,7 +3145,6 @@
         st.retryAt = 0;
         st.retryCount = 0;
         st.lastGiveUpDateUtc = "";
-        st.nextReportAt = buildNextReportTimeUtc22(now + 1000);
         ctx.store.write(st);
         ctx.refreshUi();
       } catch (err) {
@@ -3155,7 +3156,6 @@
           st.pendingDateUtc = "";
           st.retryAt = 0;
           st.retryCount = 0;
-          st.nextReportAt = buildNextReportTimeUtc22(Date.now() + 1000);
           st.lastReportError = `${st.lastReportError}(已达重试上限)`;
           ctx.store.write(st);
           ctx.refreshUi();
@@ -3209,9 +3209,6 @@
       saveButton.addEventListener("click", () => {
         const next = this.normalizeState(ctx.store.read());
         next.accountId = String(accountInput.value || "").trim();
-        if (!Number.isFinite(next.nextReportAt) || next.nextReportAt <= 0) {
-          next.nextReportAt = buildNextReportTimeUtc22(Date.now());
-        }
         ctx.store.write(next);
         refresh();
       });
@@ -3224,9 +3221,6 @@
         const next = this.normalizeState(ctx.store.read());
         next.reportEnabled = !next.reportEnabled;
         if (next.reportEnabled) {
-          if (!Number.isFinite(next.nextReportAt) || next.nextReportAt <= 0) {
-            next.nextReportAt = buildNextReportTimeUtc22(Date.now());
-          }
           this.ensurePolling(ctx);
           this.tick(ctx);
         } else {
@@ -3245,8 +3239,9 @@
       sendNowButton.textContent = "立即汇报";
       sendNowButton.addEventListener("click", () => {
         const next = this.normalizeState(ctx.store.read());
-        next.pendingDateUtc = formatUtcDate(Date.now());
+        next.pendingDateUtc = buildYesterdayUtcDate(Date.now());
         next.retryAt = 0;
+        next.retryCount = 0;
         ctx.store.write(next);
         this.sendPendingReport(ctx);
         refresh();
@@ -3270,14 +3265,9 @@
       status1.textContent = `开关: ${st.reportEnabled ? "已开启" : "未开启"}`;
       statusCard.appendChild(status1);
 
-      const status2 = document.createElement("div");
-      status2.className = "hvtb-sell-status";
-      status2.textContent = `下次计划(UTC): ${formatRecordedTimeUtc(st.nextReportAt)}`;
-      statusCard.appendChild(status2);
-
       const status6 = document.createElement("div");
       status6.className = "hvtb-sell-status";
-      status6.textContent = `最近成功: ${st.lastReportDateUtc ? `${st.lastReportDateUtc} / ${formatRecordedTime(st.lastReportAt)}` : "-"}`;
+      status6.textContent = `最近成功: ${formatRecordedTimeUtc8(st.lastReportAt)}`;
       statusCard.appendChild(status6);
 
       const status7 = document.createElement("div");

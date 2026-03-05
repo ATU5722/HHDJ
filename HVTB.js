@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         hv-toolbox
-// @namespace    hv-toolbox
-// @version      3.0.0
+// @name         HVTB
+// @namespace    HVTB
+// @version      3.0.1
 // @description  Modular HV toolbox with skill auto-upgrade module.
 // @match        https://hentaiverse.org/*
 // @exclude      https://hentaiverse.org/?s=Battle
@@ -2504,8 +2504,8 @@
     tab: "sell",
     scheduleTimer: null,
     schedulePollMs: SELL_SCHEDULE_POLL_MS,
-    defaultBidLabel: "买价出售",
-    defaultAskLabel: "卖价出售",
+    defaultBidLabel: "买价",
+    defaultAskLabel: "卖价",
     defaultCancelLabel: "取消",
 
     getStatus(ctx) {
@@ -2974,9 +2974,24 @@
         refresh();
       });
 
+      const manualWrite = document.createElement("button");
+      manualWrite.type = "button";
+      manualWrite.className = "hvtb-btn";
+      manualWrite.textContent = "写入";
+      manualWrite.addEventListener("click", () => {
+        const totalBalance = readMarketTotalBalanceFromPage();
+        if (!Number.isFinite(totalBalance)) {
+          alert("未识别到市场金额，请先手动切换到市场页面后再写入。");
+          return;
+        }
+        saveMarketTotalBalance(getSellWorld(), totalBalance);
+        refresh();
+      });
+
       manualButtons.appendChild(manualBid);
       manualButtons.appendChild(manualAsk);
       manualButtons.appendChild(manualCancel);
+      manualButtons.appendChild(manualWrite);
       manualCard.appendChild(manualButtons);
       container.appendChild(manualCard);
     }

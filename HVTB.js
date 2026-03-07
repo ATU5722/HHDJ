@@ -163,7 +163,6 @@
       let index = Number(st.index || 0);
       let activeModuleId = st.activeModuleId || "";
       const loopArena = !!st.loopArena;
-      const towerDoneBefore = !!st.towerDone;
       let towerDone = !!st.towerDone;
       const runningId = this.getRunningModuleId();
 
@@ -188,10 +187,20 @@
 
       if (index >= queue.length) {
         if (loopArena) {
+          const arenaModule = this.modules.get("auto-arena");
           const arenaState = this.makeCtx("auto-arena").store.read();
-          const arenaStarted = arenaState.lastCycleResult === "started";
-          const towerJustFinished = !towerDoneBefore && towerDone;
-          if (arenaStarted || !towerDone || towerJustFinished) {
+          const minStamina = Number.isFinite(Number(arenaModule?.minStamina))
+            ? Number(arenaModule.minStamina)
+            : 75;
+          const liveStamina = readStaminaValue();
+          const cachedStamina = Number(arenaState.lastStamina);
+          const stamina = Number.isFinite(liveStamina)
+            ? liveStamina
+            : (Number.isFinite(cachedStamina) ? cachedStamina : NaN);
+          const keepLooping = Number.isFinite(stamina)
+            ? stamina > minStamina
+            : arenaState.lastCycleResult === "started";
+          if (keepLooping) {
             writeSequenceState({ running: true, index: 0, activeModuleId: "", loopArena, towerDone, queue });
             this.scheduleSequenceTick(800);
             if (this.ui) this.ui.refresh();
@@ -2362,8 +2371,9 @@
       return this.isRunning(ctx) ? "执行中" : "空闲";
     },
 
-    start(ctx) {
-      ctx.store.write({ running: true, resumeAfter: 0 });
+    start(ctx, options) {
+      const singleBattle = !!(options && options.sequenceMode);
+      ctx.store.write({ running: true, resumeAfter: 0, singleBattle, lastCycleResult: "", lastStamina: null });
       this.scheduleRun(ctx, oneToTwoSecDelay());
       ctx.refreshUi();
     },
@@ -2414,7 +2424,10 @@
       }
 
       if (ctx.router.isOtherBattleSubPage()) {
-        return false;
+        st.resumeAfter = nextResumeAt();
+        ctx.store.write(st);
+        ctx.router.goArenaPage();
+        return true;
       }
 
       if (!ctx.router.isArenaPage()) {
@@ -2425,6 +2438,7 @@
       }
 
       const stamina = readStaminaValue();
+      if (Number.isFinite(stamina)) st.lastStamina = stamina;
       if (!Number.isFinite(stamina) || stamina <= this.minStamina) {
         st.running = false;
         st.resumeAfter = 0;
@@ -2439,9 +2453,13 @@
         if (stamina > this.minStamina && !!seq.towerDone) {
           const grStarted = await startIsekaiGrindFestByRequest();
           if (!grStarted) {
-            st.running = false;
-            st.resumeAfter = 0;
-            st.lastCycleResult = "no_start_button";
+            if (st.singleBattle) {
+              st.running = false;
+              st.resumeAfter = 0;
+            } else {
+              st.resumeAfter = nextResumeAt();
+            }
+            st.lastCycleResult = "gr_request_failed";
             ctx.store.write(st);
             return false;
           }

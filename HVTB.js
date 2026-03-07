@@ -163,6 +163,7 @@
       let index = Number(st.index || 0);
       let activeModuleId = st.activeModuleId || "";
       const loopArena = !!st.loopArena;
+      const towerDoneBefore = !!st.towerDone;
       let towerDone = !!st.towerDone;
       const runningId = this.getRunningModuleId();
 
@@ -188,7 +189,9 @@
       if (index >= queue.length) {
         if (loopArena) {
           const arenaState = this.makeCtx("auto-arena").store.read();
-          if (arenaState.lastCycleResult === "started") {
+          const arenaStarted = arenaState.lastCycleResult === "started";
+          const towerJustFinished = !towerDoneBefore && towerDone;
+          if (arenaStarted || !towerDone || towerJustFinished) {
             writeSequenceState({ running: true, index: 0, activeModuleId: "", loopArena, towerDone, queue });
             this.scheduleSequenceTick(800);
             if (this.ui) this.ui.refresh();
@@ -640,7 +643,6 @@
     id: "skill-auto-upgrade",
     name: "自动技能",
     tab: "startup",
-    stateVersion: 1,
     timer: null,
     plan: [
       { tree: "onehanded", skills: [{ id: 2101, targetTier: 3, equip: true }, { id: 2102, targetTier: 2, equip: true }, { id: 2103, targetTier: 1, equip: true }] },
@@ -685,7 +687,7 @@
       const order = this.flattenPlan();
       const status = {};
       for (const t of order) status[t.key] = "pending";
-      ctx.store.write({ version: this.stateVersion, running: true, status, resumeAfter: 0 });
+      ctx.store.write({ running: true, status, resumeAfter: 0 });
       this.scheduleRun(ctx, oneToTwoSecDelay());
       ctx.refreshUi();
     },
@@ -778,7 +780,7 @@
             ctx.store.write(st);
             return true;
           }
-          const unlockedAfterUpgradeTry = tier > 0 || isAbilityUnlocked(ab.card);
+          const unlockedAfterUpgradeTry = isAbilityEffectivelyUnlocked(tier, ab.card);
           if (tier < effectiveTargetTier && !unlockedAfterUpgradeTry) {
             st.status[task.key] = "skipped";
             ctx.store.write(st);
@@ -792,7 +794,7 @@
           continue;
         }
 
-        const unlockedForEquip = tier > 0 || isAbilityUnlocked(ab.card);
+        const unlockedForEquip = isAbilityEffectivelyUnlocked(tier, ab.card);
         if (!unlockedForEquip) {
           st.status[task.key] = "skipped";
           ctx.store.write(st);
@@ -1015,10 +1017,6 @@
     return null;
   }
 
-  function readTier(card, abilityId) {
-    return readUpgradeWindow(card, abilityId).tier;
-  }
-
   function readUpgradeWindow(card, abilityId) {
     const bars = readAbilityProgressBars(card, abilityId);
     if (bars.length === 0) return { tier: 0, upgradable: 0, total: 0 };
@@ -1158,6 +1156,10 @@
     if (!icon) return false;
     const onclick = icon.getAttribute("onclick") || "";
     return onclick.includes("do_equip_ability") || icon.getAttribute("draggable") === "true";
+  }
+
+  function isAbilityEffectivelyUnlocked(tier, card) {
+    return Number(tier || 0) > 0 || isAbilityUnlocked(card);
   }
 
   function readSlots(color) {

@@ -22,10 +22,10 @@
 
   const SEQUENCE_QUEUE = [
     "auto-stat",
-    "auto-equip",
     "skill-auto-upgrade",
-    "auto-tower",
-    "auto-arena"
+    "auto-equip",
+    "auto-arena",
+    "auto-tower"
   ];
 
   const Toolbox = {
@@ -75,7 +75,7 @@
       }
       ensureEnglishUi();
       const ctx = this.makeCtx(moduleId);
-      if (mod.start) mod.start(ctx);
+      if (mod.start) mod.start(ctx, opt);
       this.ui.refresh();
       if (this.isSequenceRunning()) this.scheduleSequenceTick(80);
       return true;
@@ -119,6 +119,8 @@
         running: true,
         index: 0,
         activeModuleId: "",
+        loopArena: true,
+        towerDone: false,
         queue: SEQUENCE_QUEUE.slice()
       });
       this.scheduleSequenceTick(20);
@@ -135,6 +137,8 @@
         running: false,
         index: Number(st.index || 0),
         activeModuleId: "",
+        loopArena: !!st.loopArena,
+        towerDone: !!st.towerDone,
         queue: Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : SEQUENCE_QUEUE.slice()
       });
       if (runningId) this.stopModule(runningId);
@@ -160,6 +164,8 @@
       const queue = Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : SEQUENCE_QUEUE.slice();
       let index = Number(st.index || 0);
       let activeModuleId = st.activeModuleId || "";
+      const loopArena = !!st.loopArena;
+      let towerDone = !!st.towerDone;
       const runningId = this.getRunningModuleId();
 
       if (activeModuleId) {
@@ -168,9 +174,13 @@
           return;
         }
         if (!runningId) {
+          if (activeModuleId === "auto-tower") {
+            const towerState = this.makeCtx("auto-tower").store.read();
+            if (towerState.lastCycleResult === "finished") towerDone = true;
+          }
           index += 1;
           activeModuleId = "";
-          writeSequenceState({ running: true, index, activeModuleId, queue });
+          writeSequenceState({ running: true, index, activeModuleId, loopArena, towerDone, queue });
         } else {
           this.scheduleSequenceTick(800);
           return;
@@ -178,7 +188,16 @@
       }
 
       if (index >= queue.length) {
-        writeSequenceState({ running: false, index, activeModuleId: "", queue });
+        if (loopArena) {
+          const arenaState = this.makeCtx("auto-arena").store.read();
+          if (arenaState.lastCycleResult === "started") {
+            writeSequenceState({ running: true, index: 0, activeModuleId: "", loopArena, towerDone, queue });
+            this.scheduleSequenceTick(800);
+            if (this.ui) this.ui.refresh();
+            return;
+          }
+        }
+        writeSequenceState({ running: false, index, activeModuleId: "", loopArena, towerDone, queue });
         if (this.ui) this.ui.refresh();
         return;
       }
@@ -189,19 +208,25 @@
       }
 
       const nextId = queue[index];
+      if (nextId === "auto-tower" && towerDone) {
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
+        this.scheduleSequenceTick(80);
+        if (this.ui) this.ui.refresh();
+        return;
+      }
       if (!this.modules.has(nextId)) {
-        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", queue });
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
         this.scheduleSequenceTick(80);
         if (this.ui) this.ui.refresh();
         return;
       }
 
-      const started = this.startModuleInternal(nextId, { fromSequence: true, silent: true });
+      const started = this.startModuleInternal(nextId, { fromSequence: true, silent: true, sequenceMode: true });
       if (!started) {
-        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", queue });
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
         this.scheduleSequenceTick(80);
       } else {
-        writeSequenceState({ running: true, index, activeModuleId: nextId, queue });
+        writeSequenceState({ running: true, index, activeModuleId: nextId, loopArena, towerDone, queue });
         this.scheduleSequenceTick(800);
       }
       if (this.ui) this.ui.refresh();
@@ -214,6 +239,8 @@
         running: false,
         index: 0,
         activeModuleId: "",
+        loopArena: false,
+        towerDone: false,
         queue: SEQUENCE_QUEUE.slice()
       };
     } catch {
@@ -221,6 +248,8 @@
         running: false,
         index: 0,
         activeModuleId: "",
+        loopArena: false,
+        towerDone: false,
         queue: SEQUENCE_QUEUE.slice()
       };
     }
@@ -689,12 +718,12 @@
       if (this.timer) clearTimeout(this.timer);
       this.timer = setTimeout(() => {
         this.timer = null;
-        this.runOnce(ctx);
+        void this.runOnce(ctx);
       }, delay);
     },
 
-    runOnce(ctx) {
-      const actionTaken = this.runStep(ctx);
+    async runOnce(ctx) {
+      const actionTaken = await this.runStep(ctx);
       if (!actionTaken) {
         const st = ctx.store.read();
         if (st.running) this.scheduleRun(ctx, oneToTwoSecDelay());
@@ -702,7 +731,7 @@
       ctx.refreshUi();
     },
 
-    runStep(ctx) {
+    async runStep(ctx) {
       const st = ctx.store.read();
       if (!st.running) return false;
       if ((st.resumeAfter || 0) > Date.now()) return false;
@@ -731,6 +760,7 @@
         return true;
       }
 
+      const ap = readAbilityPoints();
       const mp = readMasteryPoints();
       for (const task of inTree) {
         const ab = findAbilityById(task.id);
@@ -742,7 +772,13 @@
 
         const tier = readTier(ab.card, task.id);
         if (tier < task.targetTier) {
-          if (submitUpgrade(ab.card, task.id)) {
+          const upgradeTargetTier = calcUpgradeTargetTier(task.id, tier, task.targetTier, ap);
+          if (upgradeTargetTier <= tier) {
+            st.status[task.key] = "skipped";
+            ctx.store.write(st);
+            continue;
+          }
+          if (await submitUpgrade(ab.card, task.id, upgradeTargetTier, tier)) {
             st.resumeAfter = nextResumeAt();
             ctx.store.write(st);
             return true;
@@ -810,6 +846,12 @@
   function readMasteryPoints() {
     const top = document.getElementById("ability_top");
     if (!top) return 0;
+    const text = top.textContent || "";
+    const named = text.match(/(?:Mastery\s*Point(?:s)?|支配点|支配點)\s*[:：]?\s*(\d+)/i);
+    if (named) {
+      const n = Number(named[1]);
+      if (Number.isFinite(n)) return n;
+    }
     const vals = [];
     const nodes = top.querySelectorAll(".fc4 > div");
     for (const n of nodes) {
@@ -817,6 +859,75 @@
       if (m) vals.push(Number(m[1]));
     }
     return vals[1] || 0;
+  }
+
+  function readAbilityPoints() {
+    const top = document.getElementById("ability_top");
+    if (!top) return 0;
+    const text = top.textContent || "";
+    const named = text.match(/(?:Ability\s*Points?|技能点|技能點)\s*[:：]?\s*(\d+)/i);
+    if (named) {
+      const n = Number(named[1]);
+      if (Number.isFinite(n)) return n;
+    }
+
+    const node = top.children[3];
+    const fallback = (node?.textContent || "").match(/(\d+)/);
+    if (!fallback) return 0;
+    const n = Number(fallback[1]);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  const ABILITY_POINT_COSTS = Object.freeze({
+    1101: [1, 2, 3, 3, 4, 4, 4, 5, 5, 5],
+    1102: [1, 2, 3, 3, 4, 4, 4, 5, 5, 5],
+    1103: [1, 2, 3, 3, 4, 4, 4, 5, 5, 5],
+    1104: [1, 2, 3, 4, 5],
+    1105: [2, 3, 5, 7, 9],
+    1106: [2, 3, 5, 7, 9],
+    2101: [2, 3, 5],
+    2102: [1, 2],
+    2103: [3],
+    3301: [3, 5, 7],
+    3302: [3, 5, 7],
+    3303: [3, 5, 7],
+    3304: [1, 2, 3, 3, 4, 4, 5],
+    4101: [1, 2, 3, 4, 5],
+    4102: [1, 2, 3, 4, 5],
+    4103: [1, 2, 3, 5, 7],
+    4105: [1, 2, 3, 4, 5],
+    4106: [1, 2, 3, 4, 5, 6, 7],
+    4108: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    4109: [2, 3, 5],
+    4110: [2, 3, 5],
+    4111: [3, 1, 2, 3, 4],
+    4201: [1, 2, 3, 5, 7],
+    4202: [3, 5, 7],
+    4203: [1, 2, 3, 4, 5],
+    4204: [3, 5, 7],
+    4207: [1, 3, 5],
+    4211: [1, 2, 3, 4, 5]
+  });
+  const FAST_UPGRADE_INTERVAL_MS = 300;
+  const FAST_UPGRADE_MAX_CONCURRENT = 3;
+
+  function calcUpgradeTargetTier(abilityId, currentTier, targetTier, abilityPoints) {
+    const now = Math.max(0, Number(currentTier) || 0);
+    const target = Math.max(now, Number(targetTier) || now);
+    const points = Math.max(0, Number(abilityPoints) || 0);
+    const costs = ABILITY_POINT_COSTS[Number(abilityId)] || [];
+    if (costs.length === 0) return target;
+
+    let tier = now;
+    let remain = points;
+    while (tier < target && tier < costs.length) {
+      const need = Number(costs[tier] || 0);
+      if (!Number.isFinite(need) || need <= 0) break;
+      if (remain < need) break;
+      remain -= need;
+      tier += 1;
+    }
+    return tier;
   }
 
   function findAbilityById(id) {
@@ -841,58 +952,47 @@
   }
 
   function readTier(card, abilityId) {
-    const hvutBars = card.querySelectorAll(".hvut-ab-bar");
-    if (hvutBars.length > 0) {
-      let tier = 0;
-      for (const b of hvutBars) {
-        const s = (b.getAttribute("style") || "").toLowerCase();
-        if (!s.includes("x.png")) tier += 1;
-      }
-      return tier;
-    }
+    return readUpgradeWindow(card, abilityId).tier;
+  }
 
-    const legacyRow = findLegacyAwRow(card);
-    if (legacyRow) {
-      const dots = legacyRow.querySelectorAll("div");
-      let tier = 0;
-      for (const d of dots) {
-        const s = (d.getAttribute("style") || "").toLowerCase();
-        if (s.includes("f.png")) tier += 1;
-      }
-      return tier;
+  function readUpgradeWindow(card, abilityId) {
+    const bars = readAbilityProgressBars(card, abilityId);
+    if (bars.length === 0) return { tier: 0, upgradable: 0, total: 0 };
+
+    let tier = 0;
+    let upgradable = 0;
+    let total = 0;
+    for (const bar of bars) {
+      const type = readAbilityBarType(bar);
+      if (!type) continue;
+      total += 1;
+      if (type === "f") tier += 1;
+      else if (type === "u") upgradable += 1;
     }
+    return { tier, upgradable, total };
+  }
+
+  function readAbilityProgressBars(card, abilityId) {
+    const legacyRow = findLegacyAwRow(card);
+    if (legacyRow) return Array.from(legacyRow.querySelectorAll("div"));
 
     if (abilityId) {
       const globalRow = document.querySelector(`[onclick*='do_unlock_ability(${abilityId})']`);
-      if (globalRow) {
-        const dots = globalRow.querySelectorAll("div");
-        let tier = 0;
-        for (const d of dots) {
-          const s = (d.getAttribute("style") || "").toLowerCase();
-          if (s.includes("f.png")) tier += 1;
-        }
-        return tier;
-      }
+      if (globalRow) return Array.from(globalRow.querySelectorAll("div"));
     }
 
-    return 0;
+    return [];
   }
 
-  function highestUnlockButton(card, abilityId) {
-    const abilityName = getAbilityNameById(abilityId) || getAbilityName(card);
+  function readAbilityBarType(node) {
+    const s = (node?.getAttribute("style") || "").toLowerCase();
+    if (s.includes("f.png")) return "f";
+    if (s.includes("u.png")) return "u";
+    if (s.includes("x.png")) return "x";
+    return "";
+  }
 
-    const global = Array.from(document.querySelectorAll("[data-action='unlock']"));
-    if (abilityName && global.length > 0) {
-      const byName = global.filter((x) => (x.getAttribute("data-name") || "") === abilityName);
-      if (byName.length > 0) return pickHighest(byName);
-    }
-
-    const inCard = Array.from(card.querySelectorAll("[data-action='unlock']"));
-    if (inCard.length > 0) return pickHighest(inCard);
-
-    const byId = global.filter((x) => Number(x.getAttribute("data-id") || "0") === Number(abilityId));
-    if (byId.length > 0) return pickHighest(byId);
-
+  function findNativeUnlockButton(card, abilityId) {
     const byAbilityInCard = card.querySelector(`[onclick*='do_unlock_ability(${abilityId})']`) || findLegacyAwRow(card);
     if (byAbilityInCard) return byAbilityInCard;
 
@@ -914,28 +1014,79 @@
     return null;
   }
 
-  function getAbilityName(card) {
-    return (card.querySelector(".fc2 > div")?.textContent || "").trim();
-  }
+  async function submitUpgrade(card, abilityId, targetTier, currentTier) {
+    const need = Math.max(0, Number(targetTier || 0) - Number(currentTier || 0));
+    if (need > 0) {
+      const window = readUpgradeWindow(card, abilityId);
+      const fastCount = Math.min(need, window.upgradable);
+      if (fastCount > 0) {
+        const ok = await submitFastUpgrade(abilityId, fastCount);
+        if (ok) return true;
+      }
+    }
 
-  function getAbilityNameById(abilityId) {
-    const icon = document.getElementById(`slot_${abilityId}`);
-    if (!icon) return "";
-    const text = icon.getAttribute("onmouseover") || "";
-    const m = text.match(/overability\([^,]+,\s*'([^']+)'/);
-    return m ? m[1] : "";
-  }
-
-  function pickHighest(buttons) {
-    buttons.sort((a, b) => Number(b.getAttribute("data-to") || "0") - Number(a.getAttribute("data-to") || "0"));
-    return buttons[0] || null;
-  }
-
-  function submitUpgrade(card, abilityId) {
-    const btn = highestUnlockButton(card, abilityId);
+    const btn = findNativeUnlockButton(card, abilityId);
     if (!btn) return false;
     btn.click();
     return true;
+  }
+
+  async function submitFastUpgrade(abilityId, count) {
+    const id = Number(abilityId);
+    const times = Number(count || 0);
+    if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(times) || times <= 0) return false;
+
+    try {
+      await runThrottledUnlockRequests(id, times, FAST_UPGRADE_INTERVAL_MS, FAST_UPGRADE_MAX_CONCURRENT);
+      location.href = location.href;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function runThrottledUnlockRequests(abilityId, totalCount, intervalMs, maxConcurrent) {
+    const total = Math.max(0, Number(totalCount) || 0);
+    const interval = Math.max(0, Number(intervalMs) || 0);
+    const concurrent = Math.max(1, Number(maxConcurrent) || 1);
+    if (total <= 0) return;
+
+    const size = Math.min(total, concurrent);
+    let nextIndex = 0;
+    let nextStartAt = 0;
+    let scheduleChain = Promise.resolve();
+
+    function reserveStartSlot() {
+      const waitTurn = scheduleChain.then(async () => {
+        const now = Date.now();
+        const waitMs = Math.max(0, nextStartAt - now);
+        if (waitMs > 0) await sleep(waitMs);
+        nextStartAt = Date.now() + interval;
+      });
+      scheduleChain = waitTurn.catch(() => {});
+      return waitTurn;
+    }
+
+    async function sendOne() {
+      const params = new URLSearchParams();
+      params.set("unlock_ability", String(abilityId));
+      await postForm(location.href, params);
+    }
+
+    const workers = [];
+    for (let i = 0; i < size; i += 1) {
+      workers.push((async () => {
+        while (true) {
+          const idx = nextIndex;
+          nextIndex += 1;
+          if (idx >= total) return;
+          await reserveStartSlot();
+          await sendOne();
+        }
+      })());
+    }
+
+    await Promise.all(workers);
   }
 
   function isAbilityUnlocked(card) {
@@ -1036,6 +1187,26 @@
     }
   }
 
+  async function startIsekaiGrindFestByRequest() {
+    const url = `${location.origin}/isekai/?s=Battle&ss=gr`;
+    try {
+      const enterRes = await fetch(url, { credentials: "same-origin" });
+      if (!enterRes.ok) return false;
+      const html = await enterRes.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const token = doc.querySelector('input[name="postoken"]')?.getAttribute("value") || "";
+      if (!token) return false;
+
+      const params = new URLSearchParams();
+      params.set("initid", "1");
+      params.set("postoken", token);
+      await postForm(url, params);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   const MONSTER_CLASS_MAP = Object.freeze({
     ARTHROPOD: 1,
     AVION: 2,
@@ -1120,6 +1291,7 @@
   const REPORT_ENDPOINT = "https://report.6950695.xyz/api/v1/report/daily";
   const REPORT_API_KEY = "hvtb_report_signing_key_v1_2026_03_04";
   const REPORT_MAX_RETRY = 3;
+  const DYNJS_EQUIP_CACHE = new Map();
 
   function randomFrom(list) {
     if (!Array.isArray(list) || list.length === 0) return "";
@@ -1811,8 +1983,9 @@
       return this.isRunning(ctx) ? "执行中" : "空闲";
     },
 
-    start(ctx) {
-      ctx.store.write({ running: true, resumeAfter: 0 });
+    start(ctx, options) {
+      const singleBattle = !!(options && options.sequenceMode);
+      ctx.store.write({ running: true, resumeAfter: 0, singleBattle, lastCycleResult: "" });
       this.scheduleRun(ctx, oneToTwoSecDelay());
       ctx.refreshUi();
     },
@@ -1931,7 +2104,7 @@
     },
 
     start(ctx) {
-      ctx.store.write({ running: true, world: ctx.router.getWorld(), index: 0, resumeAfter: 0 });
+      ctx.store.write({ running: true, index: 0, resumeAfter: 0 });
       this.scheduleRun(ctx, oneToTwoSecDelay());
       ctx.refreshUi();
     },
@@ -1961,9 +2134,9 @@
       }, Math.max(0, Number(delayMs) || 0));
     },
 
-    runOnce(ctx) {
+    async runOnce(ctx) {
       ensureEnglishUi();
-      const actionTaken = this.runStep(ctx);
+      const actionTaken = await this.runStep(ctx);
       if (!actionTaken) {
         const st = ctx.store.read();
         if (st.running) this.scheduleRun(ctx, oneToTwoSecDelay());
@@ -1971,7 +2144,7 @@
       ctx.refreshUi();
     },
 
-    runStep(ctx) {
+    async runStep(ctx) {
       const st = ctx.store.read();
       if (!st.running) return false;
       if ((st.resumeAfter || 0) > Date.now()) return false;
@@ -1983,48 +2156,28 @@
         return false;
       }
 
-      const world = st.world || ctx.router.getWorld();
+      const world = ctx.router.getWorld();
       const targetSlot = this.slotOrder[index];
 
-      if (!ctx.router.isEquipPage()) {
-        st.resumeAfter = nextResumeAt();
-        ctx.store.write(st);
-        ctx.router.goEquipPage(world, null);
-        return true;
-      }
-
-      const currentSlot = ctx.router.getEquipSlot();
-      if (currentSlot !== targetSlot) {
-        st.resumeAfter = nextResumeAt();
-        ctx.store.write(st);
-        ctx.router.goEquipPage(world, targetSlot);
-        return true;
-      }
-
-      const best = pickBestEquipRow(targetSlot);
-      if (!best) {
+      const payload = await readEquipSlotPayload(world, targetSlot);
+      if (!payload || !payload.best) {
         st.index = index + 1;
         st.resumeAfter = nextResumeAt();
-        ctx.store.write(st);
-        const nextSlot = this.slotOrder[st.index];
-        if (typeof nextSlot === "number") {
-          ctx.router.goEquipPage(world, nextSlot);
-          return true;
-        }
-        st.running = false;
         ctx.store.write(st);
         return false;
       }
 
-      if (!selectEquipRow(best.row)) {
+      if (payload.currentEid > 0 && payload.currentEid === payload.best.eid) {
         st.index = index + 1;
+        st.resumeAfter = nextResumeAt();
         ctx.store.write(st);
         return false;
       }
 
-      const submitBtn = document.getElementById("equipsubmit");
-      if (!submitBtn || submitBtn.disabled) {
+      const ok = await submitEquipSelection(payload, payload.best.eid);
+      if (!ok) {
         st.index = index + 1;
+        st.resumeAfter = nextResumeAt();
         ctx.store.write(st);
         return false;
       }
@@ -2032,8 +2185,7 @@
       st.index = index + 1;
       st.resumeAfter = nextResumeAt();
       ctx.store.write(st);
-      submitBtn.click();
-      return true;
+      return false;
     }
   };
 
@@ -2052,7 +2204,7 @@
     },
 
     start(ctx) {
-      ctx.store.write({ running: true, resumeAfter: 0 });
+      ctx.store.write({ running: true, resumeAfter: 0, lastCycleResult: "" });
       this.scheduleRun(ctx, oneToTwoSecDelay());
       ctx.refreshUi();
     },
@@ -2078,12 +2230,12 @@
       if (this.timer) clearTimeout(this.timer);
       this.timer = setTimeout(() => {
         this.timer = null;
-        this.runOnce(ctx);
+        void this.runOnce(ctx);
       }, Math.max(0, Number(delayMs) || 0));
     },
 
-    runOnce(ctx) {
-      const actionTaken = this.runStep(ctx);
+    async runOnce(ctx) {
+      const actionTaken = await this.runStep(ctx);
       if (!actionTaken) {
         const st = ctx.store.read();
         if (st.running) this.scheduleRun(ctx, oneToTwoSecDelay());
@@ -2091,13 +2243,14 @@
       ctx.refreshUi();
     },
 
-    runStep(ctx) {
+    async runStep(ctx) {
       const st = ctx.store.read();
       if (!st.running) return false;
       if ((st.resumeAfter || 0) > Date.now()) return false;
 
       if (ctx.router.getWorld() !== "isekai") {
         st.running = false;
+        st.lastCycleResult = "wrong_world";
         ctx.store.write(st);
         return false;
       }
@@ -2113,6 +2266,7 @@
       if (!startBtn) {
         st.running = false;
         st.resumeAfter = 0;
+        st.lastCycleResult = "finished";
         ctx.store.write(st);
         return false;
       }
@@ -2129,7 +2283,7 @@
     name: "自动AR",
     tab: "startup",
     timer: null,
-    minStamina: 43,
+    minStamina: 75,
 
     isRunning(ctx) {
       return !!ctx.store.read().running;
@@ -2166,12 +2320,12 @@
       if (this.timer) clearTimeout(this.timer);
       this.timer = setTimeout(() => {
         this.timer = null;
-        this.runOnce(ctx);
+        void this.runOnce(ctx);
       }, Math.max(0, Number(delayMs) || 0));
     },
 
-    runOnce(ctx) {
-      const actionTaken = this.runStep(ctx);
+    async runOnce(ctx) {
+      const actionTaken = await this.runStep(ctx);
       if (!actionTaken) {
         const st = ctx.store.read();
         if (st.running) this.scheduleRun(ctx, oneToTwoSecDelay());
@@ -2179,7 +2333,7 @@
       ctx.refreshUi();
     },
 
-    runStep(ctx) {
+    async runStep(ctx) {
       const st = ctx.store.read();
       if (!st.running) return false;
       if ((st.resumeAfter || 0) > Date.now()) return false;
@@ -2205,19 +2359,48 @@
       if (!Number.isFinite(stamina) || stamina <= this.minStamina) {
         st.running = false;
         st.resumeAfter = 0;
+        st.lastCycleResult = "stamina_low";
         ctx.store.write(st);
         return false;
       }
 
       const bottomBtn = pickBottomArenaStartButton();
       if (!bottomBtn || !clickArenaStartButton(bottomBtn)) {
+        const seq = readSequenceState();
+        if (stamina > this.minStamina && !!seq.towerDone) {
+          const grStarted = await startIsekaiGrindFestByRequest();
+          if (!grStarted) {
+            st.running = false;
+            st.resumeAfter = 0;
+            st.lastCycleResult = "no_start_button";
+            ctx.store.write(st);
+            return false;
+          }
+          st.lastCycleResult = "started";
+          if (st.singleBattle) {
+            st.running = false;
+            st.resumeAfter = 0;
+          } else {
+            st.resumeAfter = nextResumeAt();
+          }
+          ctx.store.write(st);
+          return true;
+        }
+
         st.running = false;
         st.resumeAfter = 0;
+        st.lastCycleResult = "no_start_button";
         ctx.store.write(st);
         return false;
       }
 
-      st.resumeAfter = nextResumeAt();
+      st.lastCycleResult = "started";
+      if (st.singleBattle) {
+        st.running = false;
+        st.resumeAfter = 0;
+      } else {
+        st.resumeAfter = nextResumeAt();
+      }
       ctx.store.write(st);
       return true;
     }
@@ -3343,27 +3526,126 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  function pickBestEquipRow(slotId) {
-    const rows = Array.from(document.querySelectorAll("#equiplist tr[onclick*='select_equip']"));
-    if (rows.length === 0) return null;
+  function buildEquipSlotUrl(world, slotId) {
+    const base = world === "isekai"
+      ? `${location.origin}/isekai/?s=Character&ss=eq`
+      : `${location.origin}/?s=Character&ss=eq`;
+    return `${base}&equip_slot=${Number(slotId)}`;
+  }
 
-    let bestRow = null;
-    let bestName = "";
-    let bestScore = -Infinity;
-
-    for (const row of rows) {
-      const name = extractEquipName(row);
-      if (!name) continue;
-      const score = scoreEquipName(name, slotId);
-      if (score > bestScore) {
-        bestScore = score;
-        bestRow = row;
-        bestName = name;
+  async function readEquipSlotPayload(world, slotId) {
+    try {
+      const slotUrl = buildEquipSlotUrl(world, slotId);
+      const res = await fetch(slotUrl, { credentials: "same-origin" });
+      if (!res.ok) return null;
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const playerLevel = readPlayerLevelFromDoc(doc);
+      const dyn = await readDynjsEquipMap(doc);
+      const rows = Array.from(doc.querySelectorAll("#equiplist tr[onclick*='select_equip']"));
+      let best = null;
+      for (const row of rows) {
+        const name = extractEquipName(row);
+        if (!name) continue;
+        const eid = extractEquipId(row);
+        let level = playerLevel;
+        let condition = NaN;
+        if (eid > 0 && dyn.has(eid)) {
+          const extra = parseEquipHtmlInfo(String(dyn.get(eid)?.d || ""));
+          if (Number.isFinite(extra.level)) level = extra.level;
+          if (Number.isFinite(extra.condition)) condition = extra.condition;
+        }
+        if (Number.isFinite(condition) && condition < 20) continue;
+        const score = scoreEquipNameWithLevel(name, level, slotId);
+        if (!Number.isFinite(score)) continue;
+        const candidate = { eid, name, level, condition, score };
+        if (!best || candidate.score > best.score) best = candidate;
       }
+
+      const form = doc.getElementById("equipform");
+      if (!form || !best) return null;
+      const actionAttr = form.getAttribute("action") || slotUrl;
+      const actionUrl = new URL(actionAttr, location.origin).toString();
+
+      const baseParams = new URLSearchParams();
+      const hiddenInputs = Array.from(form.querySelectorAll("input[type='hidden'][name]"));
+      for (const input of hiddenInputs) {
+        const name = input.getAttribute("name") || "";
+        if (!name) continue;
+        baseParams.append(name, input.getAttribute("value") || "");
+      }
+      if (!baseParams.get("equip_slot")) baseParams.set("equip_slot", String(Number(slotId)));
+
+      const currentEid = readCurrentEquippedEid(doc);
+      return { actionUrl, baseParams, best, currentEid };
+    } catch {
+      return null;
+    }
+  }
+
+  function readCurrentEquippedEid(doc) {
+    const selected = doc.querySelector("#equiplist input[name='eqids[]'][checked]") || doc.querySelector("#equiplist input[name='eqids[]']:checked");
+    if (selected) {
+      const n = Number(selected.getAttribute("value") || "0");
+      if (Number.isFinite(n) && n > 0) return n;
     }
 
-    if (!bestRow) return null;
-    return { row: bestRow, score: bestScore, name: bestName };
+    const scriptText = Array.from(doc.querySelectorAll("script")).map((s) => s.textContent || "").join("\n");
+    const show = scriptText.match(/showequipped_eqid\s*=\s*(\d+)/);
+    if (show) {
+      const n = Number(show[1]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    const init = scriptText.match(/initselect\s*=\s*\[(\d+)\]/);
+    if (init) {
+      const n = Number(init[1]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }
+
+  async function submitEquipSelection(payload, eid) {
+    if (!payload || !payload.actionUrl || !payload.baseParams) return false;
+    const id = Number(eid);
+    if (!Number.isFinite(id) || id <= 0) return false;
+
+    const params = new URLSearchParams(payload.baseParams.toString());
+    params.set("action", "equip");
+    params.delete("eqids[]");
+    params.append("eqids[]", String(id));
+
+    try {
+      await postForm(payload.actionUrl, params);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function readDynjsEquipMap(doc) {
+    const map = new Map();
+    const script = doc.querySelector('script[src*="/dynjs/"][src*="equip-"]');
+    if (!script) return map;
+    const src = script.getAttribute("src") || "";
+    if (!src) return map;
+    const url = new URL(src, location.origin).toString();
+    if (DYNJS_EQUIP_CACHE.has(url)) return DYNJS_EQUIP_CACHE.get(url);
+    try {
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (!res.ok) return map;
+      const text = await res.text();
+      const m = text.match(/dynjs_equip\s*=\s*(\{[\s\S]*?\});/);
+      if (!m) return map;
+      const raw = JSON.parse(m[1]);
+      for (const [eid, value] of Object.entries(raw || {})) {
+        const n = Number(eid);
+        if (Number.isFinite(n) && n > 0) map.set(n, value || {});
+      }
+      DYNJS_EQUIP_CACHE.set(url, map);
+      return map;
+    } catch {
+      return map;
+    }
   }
 
   function extractEquipName(row) {
@@ -3372,58 +3654,103 @@
     return (label.textContent || "").replace(/\s+/g, " ").trim();
   }
 
-  function scoreEquipName(name, slotId) {
-    void slotId;
-    const n = name.toLowerCase();
-    const tokens = new Set((n.match(/[a-z]+/g) || []));
+  function extractEquipId(node) {
+    const text = [
+      node?.getAttribute?.("onmouseover") || "",
+      node?.querySelector?.("[onmouseover]")?.getAttribute?.("onmouseover") || ""
+    ].join(" ");
+    const m = text.match(/(?:hover_equip|equips\.set)\((\d+)/);
+    return m ? Number(m[1]) : 0;
+  }
+
+  function parseEquipHtmlInfo(html) {
+    const levelMatch = html.match(/Level\s+(\d+)/i);
+    const conditionMatch = html.match(/Condition\s*:\s*(\d+(?:\.\d+)?)%/i);
+    return {
+      level: levelMatch ? Number(levelMatch[1]) : NaN,
+      condition: conditionMatch ? Number(conditionMatch[1]) : NaN
+    };
+  }
+
+  function scoreEquipNameWithLevel(name, level, slotId) {
+    const normalized = (name || "").replace(/[^\w\s]+/g, " ").toLowerCase();
+    const tokens = new Set((normalized.match(/[a-z]+/g) || []));
     let score = 0;
 
-    const rules = [
-      ["peerless", 2000],
-      ["legendary", 1500],
-      ["magnificent", 1000],
-      ["exquisite", 600],
-      ["superior", 350],
-      ["slaughter", 500],
-      ["balance", 400],
-      ["focus", 250],
-      ["nimble", 250],
-      ["battlecaster", 250],
-      ["arcanist", 200],
-      ["rapier", 500],
-      ["shortsword", 300],
-      ["dagger", 200],
-      ["wakizashi", 200],
-      ["axe", 50],
-      ["kite", 2000],
-      ["tower", 2000],
-      ["buckler", 1500],
-      ["force", 1600],
-      ["phase", -3000],
-      ["protection", 250],
-      ["warding", -50],
-      ["barrier", 500],
-      ["power", 500],
-      ["reactive", 500],
-      ["plate", 200]
-    ];
+    const slot = Number(slotId);
+    if (slot === 1) {
+      const mainhandRank = [
+        ["rapier", 6000],
+        ["shortsword", 5200],
+        ["wakizashi", 4300],
+        ["dagger", 3600],
+        ["club", 2800],
+        ["axe", 2200]
+      ];
+      let matched = false;
+      for (const [k, v] of mainhandRank) {
+        if (tokens.has(k)) {
+          score += v;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) return Number.NEGATIVE_INFINITY;
+    } else if (slot === 2) {
+      const hasShield = tokens.has("buckler") || tokens.has("kite") || tokens.has("tower") || tokens.has("force") || tokens.has("shield");
+      if (!hasShield) return Number.NEGATIVE_INFINITY;
 
-    for (const [keyword, value] of rules) {
-      if (tokens.has(keyword)) score += value;
+      if (tokens.has("battlecaster")) score += 5500;
+      if (tokens.has("barrier")) score += 5500;
+
+      if (tokens.has("kite") || tokens.has("tower")) score += 4500;
+      else if (tokens.has("force")) score += 3000;
+      else if (tokens.has("buckler")) score += 1500;
+      else score += 800;
+    } else if ([11, 12, 13, 14, 15].includes(slot)) {
+      const hasHeavyArmor = tokens.has("chain") || tokens.has("plate") || tokens.has("reactive") || tokens.has("power");
+      const hasShadeArcanist = tokens.has("shade") && tokens.has("arcanist");
+
+      if (slot === 13 || slot === 14) {
+        if (!hasHeavyArmor && !hasShadeArcanist) return Number.NEGATIVE_INFINITY;
+        if (hasShadeArcanist) score += 10000;
+      } else {
+        if (!hasHeavyArmor) return Number.NEGATIVE_INFINITY;
+      }
+
+      if (tokens.has("reactive")) score += 2200;
+      if (tokens.has("power")) score += 2200;
+      if (tokens.has("barrier")) score += 3500;
+      if (tokens.has("protection")) score += 3500;
     }
+
+    const qualityRank = {
+      peerless: 8,
+      legendary: 7,
+      magnificent: 6,
+      exquisite: 5,
+      superior: 4,
+      average: 3,
+      fair: 2,
+      crude: 1
+    };
+    for (const [k, v] of Object.entries(qualityRank)) {
+      if (tokens.has(k)) {
+        score += v * 10000;
+        break;
+      }
+    }
+    if (Number.isFinite(level)) score += Math.max(0, Math.floor(level)) * 30;
 
     return score;
   }
 
-  function selectEquipRow(row) {
-    const cb = row.querySelector("input[name='eqids[]']");
-    if (!cb) return false;
-    const all = document.querySelectorAll("#equiplist input[name='eqids[]']");
-    for (const item of all) item.checked = false;
-    cb.checked = true;
-    cb.dispatchEvent(new Event("change", { bubbles: true }));
-    if (typeof update_selected_count === "function") update_selected_count();
-    return true;
+  function readPlayerLevelFromDoc(doc) {
+    const text = doc.getElementById("level_readout")?.textContent || "";
+    const m = text.match(/Lv\.(\d+)/i);
+    if (!m) return NaN;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : NaN;
   }
 
   Toolbox.register(AutoStatModule);

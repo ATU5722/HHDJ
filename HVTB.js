@@ -4,8 +4,6 @@
 // @version      3.0.1
 // @description  Modular HV toolbox with skill auto-upgrade module.
 // @match        https://hentaiverse.org/*
-// @exclude      https://hentaiverse.org/?s=Battle
-// @exclude      https://hentaiverse.org/isekai/?s=Battle
 // @exclude      https://hentaiverse.org/equip/*
 // @exclude      https://hentaiverse.org/isekai/equip/*
 // @run-at       document-end
@@ -377,9 +375,7 @@
   }
 
   function isBattlePage() {
-    const url = new URL(location.href);
-    if ((url.searchParams.get("s") || "") !== "Battle") return false;
-    return !Array.from(url.searchParams.keys()).some((key) => key !== "s");
+    return !!document.querySelector("#riddlecounter, #textlog");
   }
 
   function createFloatingUi(toolbox) {

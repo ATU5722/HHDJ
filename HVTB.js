@@ -778,7 +778,8 @@
             ctx.store.write(st);
             return true;
           }
-          if (tier < effectiveTargetTier && !isAbilityUnlocked(ab.card)) {
+          const unlockedAfterUpgradeTry = tier > 0 || isAbilityUnlocked(ab.card);
+          if (tier < effectiveTargetTier && !unlockedAfterUpgradeTry) {
             st.status[task.key] = "skipped";
             ctx.store.write(st);
             continue;
@@ -787,6 +788,13 @@
 
         if (!task.equip) {
           st.status[task.key] = "done";
+          ctx.store.write(st);
+          continue;
+        }
+
+        const unlockedForEquip = tier > 0 || isAbilityUnlocked(ab.card);
+        if (!unlockedForEquip) {
+          st.status[task.key] = "skipped";
           ctx.store.write(st);
           continue;
         }

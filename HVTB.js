@@ -756,6 +756,7 @@
         return true;
       }
 
+      const playerLevel = readPlayerLevel();
       const ap = readAbilityPoints();
       const mp = readMasteryPoints();
       for (const task of inTree) {
@@ -766,20 +767,18 @@
           continue;
         }
 
-        const tier = readTier(ab.card, task.id);
-        if (tier < task.targetTier) {
-          const upgradeTargetTier = calcUpgradeTargetTier(task.id, tier, task.targetTier, ap);
-          if (upgradeTargetTier <= tier) {
-            st.status[task.key] = "skipped";
-            ctx.store.write(st);
-            continue;
-          }
-          if (await submitUpgrade(ab.card, task.id, upgradeTargetTier, tier)) {
+        const windowInfo = readUpgradeWindow(ab.card, task.id);
+        const tier = Number(windowInfo.tier || 0);
+        const maxTierNow = resolveCurrentMaxTier(task.id, playerLevel, windowInfo, task.targetTier);
+        const effectiveTargetTier = Math.min(Number(task.targetTier || 0), maxTierNow);
+        if (tier < effectiveTargetTier) {
+          const upgradeTargetTier = calcUpgradeTargetTier(task.id, tier, effectiveTargetTier, ap);
+          if (upgradeTargetTier > tier && await submitUpgrade(ab.card, task.id, upgradeTargetTier, tier)) {
             st.resumeAfter = nextResumeAt();
             ctx.store.write(st);
             return true;
           }
-          if (!isAbilityUnlocked(ab.card)) {
+          if (tier < effectiveTargetTier && !isAbilityUnlocked(ab.card)) {
             st.status[task.key] = "skipped";
             ctx.store.write(st);
             continue;
@@ -904,8 +903,69 @@
     4207: [1, 3, 5],
     4211: [1, 2, 3, 4, 5]
   });
+  const ABILITY_UNLOCK_LEVELS = Object.freeze({
+    1101: [0, 25, 50, 75, 100, 120, 150, 200, 250, 300],
+    1102: [0, 30, 60, 90, 120, 160, 210, 260, 310, 350],
+    1103: [0, 40, 80, 120, 170, 220, 270, 330, 390, 450],
+    1104: [0, 100, 200, 300, 400],
+    1105: [0, 80, 140, 220, 380],
+    1106: [0, 90, 160, 240, 400],
+    2101: [0, 100, 200],
+    2102: [50, 150],
+    2103: [250],
+    3301: [0, 75, 150],
+    3302: [0, 75, 150],
+    3303: [0, 75, 150],
+    3304: [0, 60, 110, 170, 230, 290, 350],
+    4101: [40, 55, 75, 95, 120],
+    4102: [60, 75, 90, 110, 130],
+    4103: [90, 105, 120, 135, 155],
+    4105: [200, 220, 240, 265, 285],
+    4106: [140, 185, 225, 265, 305, 345, 385],
+    4108: [50, 70, 95, 145, 195, 245, 295, 375, 445, 500],
+    4109: [0, 35, 65],
+    4110: [100, 125, 150],
+    4111: [10, 65, 140, 220, 300],
+    4201: [70, 100, 130, 190, 250],
+    4202: [80, 165, 250],
+    4203: [130, 175, 230, 285, 330],
+    4204: [140, 225, 310],
+    4207: [80, 130, 170],
+    4211: [120, 170, 215]
+  });
   const FAST_UPGRADE_INTERVAL_MS = 300;
   const FAST_UPGRADE_MAX_CONCURRENT = 3;
+
+  function readPlayerLevel() {
+    const text = document.getElementById("level_readout")?.textContent || "";
+    const m = text.match(/Lv\.(\d+)/i);
+    if (!m) return NaN;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function calcLevelUnlockedTier(abilityId, playerLevel) {
+    if (!Number.isFinite(playerLevel)) return NaN;
+    const unlock = ABILITY_UNLOCK_LEVELS[Number(abilityId)];
+    if (!Array.isArray(unlock) || unlock.length === 0) return NaN;
+    let n = 0;
+    for (const needLv of unlock) {
+      if (Number(needLv) <= playerLevel) n += 1;
+      else break;
+    }
+    return n;
+  }
+
+  function resolveCurrentMaxTier(abilityId, playerLevel, windowInfo, fallbackTargetTier) {
+    const byLevel = calcLevelUnlockedTier(abilityId, playerLevel);
+    const byUi = Number(windowInfo?.tier || 0) + Number(windowInfo?.upgradable || 0);
+    let cap = Number.isFinite(byLevel) ? byLevel : NaN;
+    if (Number.isFinite(byUi) && byUi >= 0) {
+      cap = Number.isFinite(cap) ? Math.min(cap, byUi) : byUi;
+    }
+    if (!Number.isFinite(cap)) cap = Number(fallbackTargetTier) || 0;
+    return Math.max(0, Math.floor(cap));
+  }
 
   function calcUpgradeTargetTier(abilityId, currentTier, targetTier, abilityPoints) {
     const now = Math.max(0, Number(currentTier) || 0);

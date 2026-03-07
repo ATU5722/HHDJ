@@ -2268,8 +2268,11 @@
       }
 
       st.resumeAfter = nextResumeAt();
-      ctx.store.write(st);
       startBtn.click();
+      st.running = false;
+      st.resumeAfter = 0;
+      st.lastCycleResult = "started";
+      ctx.store.write(st);
       return true;
     }
   };

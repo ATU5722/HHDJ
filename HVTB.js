@@ -119,7 +119,8 @@
         activeModuleId: "",
         loopArena: true,
         towerDone: false,
-        queue: SEQUENCE_QUEUE.slice()
+        queue: SEQUENCE_QUEUE.slice(),
+        stopReason: ""
       });
       this.scheduleSequenceTick(20);
     },
@@ -137,7 +138,8 @@
         activeModuleId: "",
         loopArena: !!st.loopArena,
         towerDone: !!st.towerDone,
-        queue: Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : SEQUENCE_QUEUE.slice()
+        queue: Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : SEQUENCE_QUEUE.slice(),
+        stopReason: "手动停止"
       });
       if (runningId) this.stopModule(runningId);
     },
@@ -178,7 +180,7 @@
           }
           index += 1;
           activeModuleId = "";
-          writeSequenceState({ running: true, index, activeModuleId, loopArena, towerDone, queue });
+          writeSequenceState({ running: true, index, activeModuleId, loopArena, towerDone, queue, stopReason: "" });
         } else {
           this.scheduleSequenceTick(800);
           return;
@@ -186,6 +188,7 @@
       }
 
       if (index >= queue.length) {
+        let stopReason = "流程完成";
         if (loopArena) {
           const arenaModule = this.modules.get("auto-arena");
           const arenaState = this.makeCtx("auto-arena").store.read();
@@ -201,13 +204,22 @@
             ? stamina > minStamina
             : arenaState.lastCycleResult === "started";
           if (keepLooping) {
-            writeSequenceState({ running: true, index: 0, activeModuleId: "", loopArena, towerDone, queue });
+            writeSequenceState({ running: true, index: 0, activeModuleId: "", loopArena, towerDone, queue, stopReason: "" });
             this.scheduleSequenceTick(800);
             if (this.ui) this.ui.refresh();
             return;
           }
+          if (Number.isFinite(stamina) && stamina <= minStamina) {
+            stopReason = `体力低于阈值 (${stamina} <= ${minStamina})`;
+          } else if (arenaState.lastCycleResult === "gr_request_failed") {
+            stopReason = "GF请求入场失败";
+          } else if (arenaState.lastCycleResult === "no_start_button") {
+            stopReason = "AR无可打且未满足GF条件";
+          } else if (arenaState.lastCycleResult === "stamina_low") {
+            stopReason = "体力低于阈值";
+          }
         }
-        writeSequenceState({ running: false, index, activeModuleId: "", loopArena, towerDone, queue });
+        writeSequenceState({ running: false, index, activeModuleId: "", loopArena, towerDone, queue, stopReason });
         if (this.ui) this.ui.refresh();
         return;
       }
@@ -219,13 +231,13 @@
 
       const nextId = queue[index];
       if (nextId === "auto-tower" && towerDone) {
-        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue, stopReason: "" });
         this.scheduleSequenceTick(80);
         if (this.ui) this.ui.refresh();
         return;
       }
       if (!this.modules.has(nextId)) {
-        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue, stopReason: "" });
         this.scheduleSequenceTick(80);
         if (this.ui) this.ui.refresh();
         return;
@@ -233,10 +245,10 @@
 
       const started = this.startModuleInternal(nextId, { fromSequence: true, silent: true, sequenceMode: true });
       if (!started) {
-        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue });
+        writeSequenceState({ running: true, index: index + 1, activeModuleId: "", loopArena, towerDone, queue, stopReason: "" });
         this.scheduleSequenceTick(80);
       } else {
-        writeSequenceState({ running: true, index, activeModuleId: nextId, loopArena, towerDone, queue });
+        writeSequenceState({ running: true, index, activeModuleId: nextId, loopArena, towerDone, queue, stopReason: "" });
         this.scheduleSequenceTick(800);
       }
       if (this.ui) this.ui.refresh();
@@ -251,7 +263,8 @@
         activeModuleId: "",
         loopArena: false,
         towerDone: false,
-        queue: SEQUENCE_QUEUE.slice()
+        queue: SEQUENCE_QUEUE.slice(),
+        stopReason: ""
       };
     } catch {
       return {
@@ -260,7 +273,8 @@
         activeModuleId: "",
         loopArena: false,
         towerDone: false,
-        queue: SEQUENCE_QUEUE.slice()
+        queue: SEQUENCE_QUEUE.slice(),
+        stopReason: ""
       };
     }
   }
@@ -438,7 +452,12 @@
        "#hvtb-sell-extra{display:flex;flex-direction:column;gap:8px;margin-top:8px;}",
        "#hvtb-report-modules{display:flex;flex-direction:column;gap:6px;}",
        "#hvtb-report-extra{display:flex;flex-direction:column;gap:8px;}",
-       "#hvtb-actions{display:flex;justify-content:flex-end;margin-top:8px;}",
+       "#hvtb-actions{display:flex;flex-direction:column;gap:6px;margin-top:8px;}",
+       ".hvtb-seq-status{border:1px solid #d7dce3;border-radius:8px;background:#fff;padding:6px 8px;color:#4b5563;font-size:12px;line-height:1.45;}",
+       ".hvtb-seq-line{display:flex;justify-content:space-between;gap:10px;}",
+       ".hvtb-seq-key{color:#6b7280;}",
+       ".hvtb-seq-value{color:#111827;font-weight:600;}",
+       ".hvtb-seq-btnwrap{display:flex;justify-content:flex-end;}",
       ".hvtb-row{display:flex;align-items:center;gap:6px;}",
       ".hvtb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;}",
       ".hvtb-name-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
@@ -553,6 +572,28 @@
       if (tab !== "startup") return;
 
       const seqState = readSequenceState();
+      const queue = Array.isArray(seqState.queue) && seqState.queue.length > 0 ? seqState.queue : SEQUENCE_QUEUE.slice();
+      const total = queue.length;
+      const idx = Math.max(0, Math.min(Number(seqState.index || 0), total));
+      const currentId = seqState.activeModuleId || queue[Math.min(idx, Math.max(0, total - 1))] || "";
+      const currentMod = currentId ? toolbox.modules.get(currentId) : null;
+      const currentName = currentMod ? currentMod.name : (seqState.running ? "待切换" : "无");
+      const progress = `${idx}/${total}`;
+      const arenaState = toolbox.makeCtx("auto-arena").store.read();
+      const liveStamina = readStaminaValue();
+      const cachedStamina = Number(arenaState.lastStamina);
+      const stamina = Number.isFinite(liveStamina) ? liveStamina : (Number.isFinite(cachedStamina) ? cachedStamina : NaN);
+      const staminaText = Number.isFinite(stamina) ? String(stamina) : "读取失败";
+      const stopReason = seqState.running ? "运行中" : (seqState.stopReason || "未启动");
+
+      const info = document.createElement("div");
+      info.className = "hvtb-seq-status";
+      info.innerHTML = [
+        `<div class='hvtb-seq-line'><span class='hvtb-seq-key'>进度</span><span class='hvtb-seq-value'>${escapeHtml(progress)} (${escapeHtml(currentName)})</span></div>`,
+        `<div class='hvtb-seq-line'><span class='hvtb-seq-key'>体力</span><span class='hvtb-seq-value'>${escapeHtml(staminaText)}</span></div>`,
+        `<div class='hvtb-seq-line'><span class='hvtb-seq-key'>停止原因</span><span class='hvtb-seq-value'>${escapeHtml(stopReason)}</span></div>`
+      ].join("");
+
       const seqBtn = document.createElement("button");
       seqBtn.className = "hvtb-btn";
       seqBtn.type = "button";
@@ -560,8 +601,12 @@
       seqBtn.addEventListener("click", () => {
         toolbox.toggleSequence();
       });
+      const btnWrap = document.createElement("div");
+      btnWrap.className = "hvtb-seq-btnwrap";
+      btnWrap.appendChild(seqBtn);
       startupActionsEl.innerHTML = "";
-      startupActionsEl.appendChild(seqBtn);
+      startupActionsEl.appendChild(info);
+      startupActionsEl.appendChild(btnWrap);
     }
 
     function renderModuleRows(container, tab) {
@@ -1232,9 +1277,11 @@
 
   function readStaminaValue() {
     const text = document.getElementById("stamina_readout")?.textContent || "";
-    const m = text.match(/Stamina\s*:\s*(\d+)/i);
-    if (!m) return NaN;
-    const n = Number(m[1]);
+    const named = text.match(/(?:Stamina|体力|耐力)\s*[:：]?\s*(\d+)/i);
+    const fallback = text.match(/(\d+)/);
+    const raw = (named && named[1]) || (fallback && fallback[1]) || "";
+    if (!raw) return NaN;
+    const n = Number(raw);
     return Number.isFinite(n) ? n : NaN;
   }
 

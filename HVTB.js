@@ -15,7 +15,8 @@
 
   const STORE_KEYS = {
     ui: "hv_toolbox_ui_state",
-    sequence: "hv_toolbox_sequence_state"
+    sequence: "hv_toolbox_sequence_state",
+    monsterSequence: "hv_toolbox_monster_sequence_state"
   };
 
   const SEQUENCE_QUEUE = [
@@ -24,6 +25,12 @@
     "auto-equip",
     "auto-arena",
     "auto-tower"
+  ];
+
+  const MONSTER_SEQUENCE_QUEUE = [
+    "auto-create-monster",
+    "auto-upgrade-pl0-monster",
+    "auto-rename-monster"
   ];
 
   const Toolbox = {
@@ -42,6 +49,7 @@
         if (mod.resume) mod.resume(this.makeCtx(mod.id));
       }
       this.resumeSequence();
+      this.resumeMonsterSequence();
       this.ui.refresh();
     },
 
@@ -71,11 +79,16 @@
         if (!opt.silent) alert("一键启动进行中，不能手动启动其他模块。");
         return false;
       }
+      if (!opt.fromSequence && this.isMonsterSequenceRunning()) {
+        if (!opt.silent) alert("怪物一键启动进行中，不能手动启动其他模块。");
+        return false;
+      }
       ensureEnglishUi();
       const ctx = this.makeCtx(moduleId);
       if (mod.start) mod.start(ctx, opt);
       this.ui.refresh();
       if (this.isSequenceRunning()) this.scheduleSequenceTick(80);
+      if (this.isMonsterSequenceRunning()) this.scheduleMonsterSequenceTick(80);
       return true;
     },
 
@@ -86,6 +99,7 @@
       if (mod.stop) mod.stop(ctx);
       this.ui.refresh();
       if (this.isSequenceRunning()) this.scheduleSequenceTick(80);
+      if (this.isMonsterSequenceRunning()) this.scheduleMonsterSequenceTick(80);
       return true;
     },
 
@@ -101,9 +115,19 @@
       return !!readSequenceState().running;
     },
 
+    isMonsterSequenceRunning() {
+      return !!readMonsterSequenceState().running;
+    },
+
     toggleSequence() {
       if (this.isSequenceRunning()) this.stopSequence();
       else this.startSequence();
+      this.ui.refresh();
+    },
+
+    toggleMonsterSequence() {
+      if (this.isMonsterSequenceRunning()) this.stopMonsterSequence();
+      else this.startMonsterSequence();
       this.ui.refresh();
     },
 
@@ -142,6 +166,109 @@
         stopReason: "手动停止"
       });
       if (runningId) this.stopModule(runningId);
+    },
+
+    startMonsterSequence() {
+      const runningId = this.getRunningModuleId();
+      if (runningId) {
+        alert("已有模块在运行，无法启动怪物一键流程。");
+        return;
+      }
+      if (this.isSequenceRunning()) {
+        alert("全局一键启动进行中，不能启动怪物流程。");
+        return;
+      }
+      writeMonsterSequenceState({
+        running: true,
+        index: 0,
+        activeModuleId: "",
+        queue: MONSTER_SEQUENCE_QUEUE.slice(),
+        stopReason: ""
+      });
+      this.scheduleMonsterSequenceTick(20);
+    },
+
+    stopMonsterSequence() {
+      if (this.monsterSequenceTimer) {
+        clearTimeout(this.monsterSequenceTimer);
+        this.monsterSequenceTimer = null;
+      }
+      const st = readMonsterSequenceState();
+      const runningId = this.getRunningModuleId();
+      writeMonsterSequenceState({
+        running: false,
+        index: Number(st.index || 0),
+        activeModuleId: "",
+        queue: Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : MONSTER_SEQUENCE_QUEUE.slice(),
+        stopReason: "手动停止"
+      });
+      if (runningId && MONSTER_SEQUENCE_QUEUE.includes(runningId)) this.stopModule(runningId);
+    },
+
+    resumeMonsterSequence() {
+      if (!this.isMonsterSequenceRunning()) return;
+      this.scheduleMonsterSequenceTick(120);
+    },
+
+    scheduleMonsterSequenceTick(delayMs) {
+      if (this.monsterSequenceTimer) clearTimeout(this.monsterSequenceTimer);
+      this.monsterSequenceTimer = setTimeout(() => {
+        this.monsterSequenceTimer = null;
+        this.runMonsterSequenceStep();
+      }, Math.max(0, Number(delayMs) || 0));
+    },
+
+    runMonsterSequenceStep() {
+      const st = readMonsterSequenceState();
+      if (!st.running) return;
+
+      const queue = Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : MONSTER_SEQUENCE_QUEUE.slice();
+      let index = Number(st.index || 0);
+      let activeModuleId = st.activeModuleId || "";
+      const runningId = this.getRunningModuleId();
+
+      if (activeModuleId) {
+        if (runningId === activeModuleId) {
+          this.scheduleMonsterSequenceTick(800);
+          return;
+        }
+        if (!runningId) {
+          index += 1;
+          activeModuleId = "";
+          writeMonsterSequenceState({ running: true, index, activeModuleId, queue, stopReason: "" });
+        } else {
+          this.scheduleMonsterSequenceTick(800);
+          return;
+        }
+      }
+
+      if (index >= queue.length) {
+        writeMonsterSequenceState({ running: false, index, activeModuleId: "", queue, stopReason: "流程完成" });
+        if (this.ui) this.ui.refresh();
+        return;
+      }
+
+      if (runningId) {
+        this.scheduleMonsterSequenceTick(800);
+        return;
+      }
+
+      const nextId = queue[index];
+      if (!this.modules.has(nextId)) {
+        writeMonsterSequenceState({ running: true, index: index + 1, activeModuleId: "", queue, stopReason: "" });
+        this.scheduleMonsterSequenceTick(80);
+        if (this.ui) this.ui.refresh();
+        return;
+      }
+
+      const started = this.startModuleInternal(nextId, { fromSequence: true, silent: true, sequenceMode: true });
+      if (!started) {
+        this.scheduleMonsterSequenceTick(800);
+      } else {
+        writeMonsterSequenceState({ running: true, index, activeModuleId: nextId, queue, stopReason: "" });
+        this.scheduleMonsterSequenceTick(800);
+      }
+      if (this.ui) this.ui.refresh();
     },
 
     resumeSequence() {
@@ -283,6 +410,30 @@
     localStorage.setItem(STORE_KEYS.sequence, JSON.stringify(next));
   }
 
+  function readMonsterSequenceState() {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEYS.monsterSequence) || "null") || {
+        running: false,
+        index: 0,
+        activeModuleId: "",
+        queue: MONSTER_SEQUENCE_QUEUE.slice(),
+        stopReason: ""
+      };
+    } catch {
+      return {
+        running: false,
+        index: 0,
+        activeModuleId: "",
+        queue: MONSTER_SEQUENCE_QUEUE.slice(),
+        stopReason: ""
+      };
+    }
+  }
+
+  function writeMonsterSequenceState(next) {
+    localStorage.setItem(STORE_KEYS.monsterSequence, JSON.stringify(next));
+  }
+
   function createModuleStore(moduleId) {
     const key = `hv_toolbox_module_${moduleId}`;
     return {
@@ -422,6 +573,7 @@
       "  </div>",
       "  <div class='hvtb-page' data-page='monster'>",
       "    <div id='hvtb-monster-modules'></div>",
+      "    <div id='hvtb-monster-extra'></div>",
       "  </div>",
        "  <div class='hvtb-page' data-page='sell'>",
        "    <div id='hvtb-sell-modules'></div>",
@@ -448,6 +600,7 @@
       ".hvtb-page.active{display:block;}",
       "#hvtb-modules{display:flex;flex-direction:column;gap:6px;}",
        "#hvtb-monster-modules{display:flex;flex-direction:column;gap:6px;}",
+       "#hvtb-monster-extra{display:flex;flex-direction:column;gap:8px;margin-top:8px;}",
        "#hvtb-sell-modules{display:flex;flex-direction:column;gap:6px;}",
        "#hvtb-sell-extra{display:flex;flex-direction:column;gap:8px;margin-top:8px;}",
        "#hvtb-report-modules{display:flex;flex-direction:column;gap:6px;}",
@@ -477,8 +630,9 @@
     const ball = root.querySelector("#hvtb-ball");
     const startupModulesEl = root.querySelector("#hvtb-modules");
     const startupActionsEl = root.querySelector("#hvtb-actions");
-    const monsterModulesEl = root.querySelector("#hvtb-monster-modules");
-    const sellModulesEl = root.querySelector("#hvtb-sell-modules");
+     const monsterModulesEl = root.querySelector("#hvtb-monster-modules");
+     const monsterExtraEl = root.querySelector("#hvtb-monster-extra");
+     const sellModulesEl = root.querySelector("#hvtb-sell-modules");
     const sellExtraEl = root.querySelector("#hvtb-sell-extra");
     const reportModulesEl = root.querySelector("#hvtb-report-modules");
     const reportExtraEl = root.querySelector("#hvtb-report-extra");
@@ -564,6 +718,7 @@
 
       renderModuleRows(startupModulesEl, "startup");
       renderModuleRows(monsterModulesEl, "monster");
+      renderTabExtras(monsterExtraEl, "monster");
       renderModuleRows(sellModulesEl, "sell");
       renderModuleRows(reportModulesEl, "report");
       renderTabExtras(sellExtraEl, "sell");
@@ -611,10 +766,23 @@
 
     function renderModuleRows(container, tab) {
       container.innerHTML = "";
-      for (const mod of toolbox.modules.values()) {
+      const mods = Array.from(toolbox.modules.values()).filter((mod) => {
         const modTab = mod.tab || "startup";
-        if (modTab !== tab) continue;
-        if (mod.showInList === false) continue;
+        if (modTab !== tab) return false;
+        if (mod.showInList === false) return false;
+        return true;
+      });
+      if (tab === "startup") {
+        const order = new Map(SEQUENCE_QUEUE.map((id, i) => [id, i]));
+        mods.sort((a, b) => {
+          const ai = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
+          const bi = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
+          if (ai !== bi) return ai - bi;
+          return 0;
+        });
+      }
+
+      for (const mod of mods) {
         const ctx = toolbox.makeCtx(mod.id);
         const row = document.createElement("div");
         row.className = "hvtb-row";
@@ -789,7 +957,20 @@
       if ((st.resumeAfter || 0) > Date.now()) return false;
 
       const order = this.flattenPlan();
-      const pending = order.filter((x) => (st.status || {})[x.key] === "pending");
+      const playerLevel = readPlayerLevel();
+      let pending = order.filter((x) => (st.status || {})[x.key] === "pending");
+      if (Number.isFinite(playerLevel) && playerLevel < 150) {
+        let changed = false;
+        for (const task of pending) {
+          if (!isDeprecatingSkillTree(task.tree)) continue;
+          st.status[task.key] = "skipped";
+          changed = true;
+        }
+        if (changed) {
+          ctx.store.write(st);
+          pending = order.filter((x) => (st.status || {})[x.key] === "pending");
+        }
+      }
       if (pending.length === 0) {
         st.running = false;
         ctx.store.write(st);
@@ -812,10 +993,14 @@
         return true;
       }
 
-      const playerLevel = readPlayerLevel();
       const ap = readAbilityPoints();
       const mp = readMasteryPoints();
       for (const task of inTree) {
+        if (Number.isFinite(playerLevel) && playerLevel < 150 && isDeprecatingSkillTree(task.tree)) {
+          st.status[task.key] = "skipped";
+          ctx.store.write(st);
+          continue;
+        }
         const ab = findAbilityById(task.id);
         if (!ab) {
           st.status[task.key] = "skipped";
@@ -918,6 +1103,10 @@
       if (m) vals.push(Number(m[1]));
     }
     return vals[1] || 0;
+  }
+
+  function isDeprecatingSkillTree(tree) {
+    return tree === "deprecating1" || tree === "deprecating2";
   }
 
   function readAbilityPoints() {
@@ -1434,24 +1623,60 @@
     });
   }
 
-  function readUnnamedMonsterSlots() {
-    const rows = Array.from(document.querySelectorAll("#slot_pane .msl"));
-    const result = [];
-    for (const row of rows) {
-      const onclick = row.getAttribute("onclick") || "";
-      const slotMatch = onclick.match(/[?&]slot=(\d+)/);
+  function readMonsterLabRows() {
+    const directRows = Array.from(document.querySelectorAll("#slot_pane > div[onclick]"));
+    if (directRows.length > 0) return directRows;
+    return Array.from(document.querySelectorAll("#slot_pane .msl"));
+  }
+
+  function parseMonsterLabRows() {
+    return readMonsterLabRows().map((row, index) => {
+      const rawOnclick = row.getAttribute("onclick") || "";
+      const normalizedOnclick = rawOnclick.replace(/&amp;/gi, "&");
+      const compactOnclick = normalizedOnclick.replace(/\s+/g, "").toLowerCase();
+      const slotMatch = normalizedOnclick.match(/[?&]slot=(\d+)/i);
       const slot = slotMatch ? Number(slotMatch[1]) : NaN;
-      if (!Number.isFinite(slot)) continue;
+      const cells = Array.from(row.children).map((cell) => (cell.textContent || "").replace(/\s+/g, " ").trim());
+      const orderMatch = (cells[0] || "").match(/(\d+)/);
+      const order = orderMatch ? Number(orderMatch[1]) : (Number.isFinite(slot) ? slot : index + 1);
+      const name = cells[1] || "";
+      const plText = cells[2] || "";
+      const plMatch = plText.match(/(?:^|\b)PL\s*(\d+)/i) || plText.match(/(\d+)/);
+      const pl = plMatch ? Number(plMatch[1]) : NaN;
+      return {
+        row,
+        index,
+        slot,
+        order,
+        name,
+        pl,
+        onclick: normalizedOnclick,
+        compactOnclick,
+        hasSlotParam: /[?&]slot=\d+/.test(compactOnclick)
+      };
+    });
+  }
 
-      const nameCell = row.children[1];
-      const name = (nameCell?.textContent || "").replace(/\s+/g, " ").trim();
-      if (!/unnamed/i.test(name)) continue;
+  function readUnnamedMonsterSlots() {
+    const result = parseMonsterLabRows()
+      .filter((entry) => Number.isFinite(entry.slot) && /unnamed/i.test(entry.name))
+      .map((entry) => ({ slot: entry.slot, order: entry.order }));
+    result.sort((a, b) => a.order - b.order);
+    return result;
+  }
 
-      const orderCell = row.children[0];
-      const orderMatch = (orderCell?.textContent || "").match(/(\d+)/);
-      const order = orderMatch ? Number(orderMatch[1]) : slot;
-      result.push({ slot, order });
-    }
+  function readEmptyMonsterSlots() {
+    const result = parseMonsterLabRows()
+      .filter((entry) => !entry.hasSlotParam)
+      .map((entry, index) => ({ order: Number.isFinite(entry.order) ? entry.order : index + 1 }));
+    result.sort((a, b) => a.order - b.order);
+    return result;
+  }
+
+  function readPlZeroMonsterSlots() {
+    const result = parseMonsterLabRows()
+      .filter((entry) => Number.isFinite(entry.slot) && entry.pl === 0)
+      .map((entry) => ({ slot: entry.slot, order: entry.order, pl: entry.pl }));
     result.sort((a, b) => a.order - b.order);
     return result;
   }
@@ -2545,7 +2770,7 @@
     name: "自动建怪",
     tab: "monster",
     timer: null,
-    defaultTarget: 200,
+    defaultTarget: 0,
     maxFailures: 2,
 
     isRunning(ctx) {
@@ -2561,14 +2786,10 @@
     },
 
     start(ctx) {
-      const prev = ctx.store.read();
-      const target = Number.isFinite(Number(prev.target)) && Number(prev.target) > 0
-        ? Number(prev.target)
-        : this.defaultTarget;
       ctx.store.write({
         running: true,
         created: 0,
-        target,
+        target: this.defaultTarget,
         failures: 0,
         resumeAfter: 0
       });
@@ -2616,16 +2837,6 @@
         return;
       }
 
-      const created = Number(st.created || 0);
-      const target = Number(st.target || this.defaultTarget);
-      if (created >= target) {
-        st.running = false;
-        st.resumeAfter = 0;
-        ctx.store.write(st);
-        ctx.refreshUi();
-        return;
-      }
-
       if (!ctx.router.isMonsterLabPage()) {
         st.resumeAfter = nextResumeAt();
         ctx.store.write(st);
@@ -2633,6 +2844,22 @@
         return;
       }
 
+      const created = Number(st.created || 0);
+      const emptySlots = readEmptyMonsterSlots();
+      const emptyCount = emptySlots.length;
+      if (!Number.isFinite(Number(st.target)) || Number(st.target) <= 0) {
+        st.target = emptyCount;
+      }
+      const target = Number(st.target || 0);
+      if (target <= 0 || emptyCount <= 0 || created >= target) {
+        st.running = false;
+        st.resumeAfter = 0;
+        ctx.store.write(st);
+        ctx.refreshUi();
+        return;
+      }
+
+      ctx.store.write(st);
       const ok = await this.createOneMonster();
       if (ok) {
         st.created = created + 1;
@@ -2675,6 +2902,182 @@
       } catch {
         return false;
       }
+    }
+  };
+
+  const AutoUpgradePlZeroMonsterModule = {
+    id: "auto-upgrade-pl0-monster",
+    name: "自动升级",
+    tab: "monster",
+    timer: null,
+    maxFailures: 2,
+    plan: [
+      ["pa_str", 1],
+      ["pa_dex", 1],
+      ["pa_agi", 1],
+      ["pa_end", 1],
+      ["pa_int", 1],
+      ["pa_wis", 1],
+      ["er_fire", 2],
+      ["er_cold", 1],
+      ["er_elec", 1],
+      ["er_wind", 1],
+      ["er_holy", 1],
+      ["er_dark", 1]
+    ],
+
+    isRunning(ctx) {
+      return !!ctx.store.read().running;
+    },
+
+    getStatus(ctx) {
+      const st = ctx.store.read();
+      if (!st.running) return st.lastMessage || "空闲";
+      const done = Number(st.upgraded || 0);
+      const total = Number(st.total || 0);
+      const suffix = st.currentSlot ? ` S${st.currentSlot}` : "";
+      return `执行中(${done}/${total > 0 ? total : "?"}${suffix})`;
+    },
+
+    start(ctx) {
+      ctx.store.write({
+        running: true,
+        upgraded: 0,
+        total: 0,
+        currentSlot: 0,
+        pendingSlots: [],
+        failures: 0,
+        lastMessage: "开始扫描",
+        resumeAfter: 0
+      });
+      this.scheduleRun(ctx, oneToTwoSecDelay());
+      ctx.refreshUi();
+    },
+
+    stop(ctx) {
+      const st = ctx.store.read();
+      st.running = false;
+      st.resumeAfter = 0;
+      st.currentSlot = 0;
+      st.lastMessage = st.lastMessage || "已停止";
+      ctx.store.write(st);
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      ctx.refreshUi();
+    },
+
+    resume(ctx) {
+      const st = ctx.store.read();
+      if (!st.running) return;
+      this.scheduleRun(ctx, Math.max(0, (st.resumeAfter || 0) - Date.now()));
+    },
+
+    scheduleRun(ctx, delayMs) {
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.runOnce(ctx).catch(() => {
+          const st = ctx.store.read();
+          st.running = false;
+          st.resumeAfter = 0;
+          st.lastMessage = "异常停止";
+          ctx.store.write(st);
+          ctx.refreshUi();
+        });
+      }, Math.max(0, Number(delayMs) || 0));
+    },
+
+    async runOnce(ctx) {
+      const st = ctx.store.read();
+      if (!st.running) return;
+      if ((st.resumeAfter || 0) > Date.now()) {
+        this.scheduleRun(ctx, (st.resumeAfter || 0) - Date.now());
+        return;
+      }
+
+      if (!ctx.router.isMonsterLabPage()) {
+        st.resumeAfter = nextResumeAt();
+        st.lastMessage = "跳转到怪物页";
+        ctx.store.write(st);
+        ctx.router.goMonsterLabPage();
+        return;
+      }
+
+      let pendingSlots = Array.isArray(st.pendingSlots) ? st.pendingSlots.map((x) => Number(x)).filter((x) => Number.isFinite(x)) : [];
+      if (pendingSlots.length === 0) {
+        const targets = readPlZeroMonsterSlots();
+        pendingSlots = targets.map((x) => Number(x.slot)).filter((x) => Number.isFinite(x));
+        st.pendingSlots = pendingSlots.slice();
+        st.total = pendingSlots.length;
+        st.upgraded = 0;
+      }
+
+      if (pendingSlots.length === 0) {
+        st.running = false;
+        st.currentSlot = 0;
+        st.resumeAfter = 0;
+        st.lastMessage = "未找到PL=0怪";
+        ctx.store.write(st);
+        ctx.refreshUi();
+        return;
+      }
+
+      const targetSlot = pendingSlots[0];
+      st.currentSlot = targetSlot;
+      st.lastMessage = `升级槽位 ${targetSlot}`;
+      ctx.store.write(st);
+
+      const ok = await this.upgradeOneMonster(targetSlot);
+      if (ok) {
+        st.upgraded = Number(st.upgraded || 0) + 1;
+        st.pendingSlots = pendingSlots.slice(1);
+        st.currentSlot = 0;
+        st.failures = 0;
+        st.lastMessage = `已完成 ${st.upgraded}/${st.total}`;
+        if (st.pendingSlots.length === 0) {
+          st.running = false;
+          st.resumeAfter = 0;
+          st.lastMessage = `已完成 ${st.upgraded}/${st.total}`;
+          ctx.store.write(st);
+          ctx.refreshUi();
+          return;
+        }
+        st.resumeAfter = Date.now() + 1200 + Math.floor(Math.random() * 1001);
+        ctx.store.write(st);
+        this.scheduleRun(ctx, st.resumeAfter - Date.now());
+      } else {
+        st.failures = Number(st.failures || 0) + 1;
+        st.lastMessage = `槽位 ${targetSlot} 升级失败`;
+        if (st.failures >= this.maxFailures) {
+          st.running = false;
+          st.resumeAfter = 0;
+          ctx.store.write(st);
+          ctx.refreshUi();
+          return;
+        }
+        st.resumeAfter = Date.now() + 1500 + Math.floor(Math.random() * 1101);
+        ctx.store.write(st);
+        this.scheduleRun(ctx, st.resumeAfter - Date.now());
+      }
+
+      ctx.refreshUi();
+    },
+
+    async upgradeOneMonster(slot) {
+      for (const [upgradeKey, count] of this.plan) {
+        const params = new URLSearchParams();
+        params.set("crystal_upgrade", upgradeKey);
+        params.set("crystal_count", String(count));
+        try {
+          await postForm(`?s=Bazaar&ss=ml&slot=${Number(slot)}`, params);
+        } catch {
+          return false;
+        }
+        await sleep(350 + Math.floor(Math.random() * 251));
+      }
+      return true;
     }
   };
 
@@ -2812,6 +3215,45 @@
       }
 
       ctx.refreshUi();
+    }
+  };
+
+  const MonsterSequenceModule = {
+    id: "monster-sequence",
+    tab: "monster",
+    showInList: false,
+
+    renderTabExtra({ container, toolbox, refresh }) {
+      const st = readMonsterSequenceState();
+      const queue = Array.isArray(st.queue) && st.queue.length > 0 ? st.queue : MONSTER_SEQUENCE_QUEUE.slice();
+      const total = queue.length;
+      const idx = Math.max(0, Math.min(Number(st.index || 0), total));
+      const currentId = st.running ? (st.activeModuleId || queue[Math.min(idx, Math.max(0, total - 1))] || "") : "";
+      const currentMod = currentId ? toolbox.modules.get(currentId) : null;
+      const currentName = st.running ? (currentMod ? currentMod.name : "待切换") : "未启动";
+      const progress = st.running ? `${idx}/${total}` : "-";
+      const stopReason = st.running ? `运行中 ${progress} (${currentName})` : (st.stopReason || "未启动");
+
+      const card = document.createElement("div");
+      card.className = "hvtb-seq-status";
+      card.innerHTML = [
+        `<div class='hvtb-seq-line'><span class='hvtb-seq-key'>状态</span><span class='hvtb-seq-value'>${escapeHtml(stopReason)}</span></div>`
+      ].join("");
+
+      const btnWrap = document.createElement("div");
+      btnWrap.className = "hvtb-seq-btnwrap";
+      const btn = document.createElement("button");
+      btn.className = "hvtb-btn";
+      btn.type = "button";
+      btn.textContent = st.running ? "一键停止" : "一键启动";
+      btn.addEventListener("click", () => {
+        toolbox.toggleMonsterSequence();
+        refresh();
+      });
+      btnWrap.appendChild(btn);
+
+      container.appendChild(card);
+      container.appendChild(btnWrap);
     }
   };
 
@@ -3893,7 +4335,9 @@
   Toolbox.register(AutoTowerModule);
   Toolbox.register(AutoArenaModule);
   Toolbox.register(AutoCreateMonsterModule);
+  Toolbox.register(AutoUpgradePlZeroMonsterModule);
   Toolbox.register(AutoRenameMonsterModule);
+  Toolbox.register(MonsterSequenceModule);
   Toolbox.register(AutoSellModule);
   Toolbox.register(SellReportModule);
   Toolbox.init();

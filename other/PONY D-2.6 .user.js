@@ -10,6 +10,8 @@
 // @compatible   Chrome/Chromium + Tampermonkey
 // @connect      6950695.xyz
 // @connect      localhost
+// @connect      hentaiverse.org
+// @connect      alt.hentaiverse.org
 // @grant        GM.xmlHttpRequest
 // @grant        GM_notification
 // @grant        GM.notification
@@ -24,11 +26,10 @@
     const CONFIG = {
         API_URL: 'https://6950695.xyz',  // 主域名（HTTPS）
         API_KEY: '6Pq3Zx9Kj',
-        DEFAULT_SUBMIT_DELAY: 5,         // 默认提交延迟（秒） - 现在仅作为最小延迟参考
         MIN_DELAY: 3000,                  // 最小延迟（毫秒）
         MAX_DELAY: 9000,                  // 最大延迟（毫秒）
         TIMEOUT: 10000,                  // 请求超时时间（毫秒）
-        ENABLE_NOTIFICATION: 0,       // 是否启用通知
+        ENABLE_NOTIFICATION: true,       // 是否启用通知
         CACHE_PRIORITY: true,            // 是否优先使用浏览器缓存
     };
 
@@ -293,7 +294,13 @@
         const optionBoxes = riddlerElement.children;
         // 检查选项数量：真实选项框恰好 6 个，多了说明是陷阱选项框
         if (optionBoxes.length !== 6) {
-            notify(`Trap detected! Option count: ${optionBoxes.length} (expected 6)`, 'WARNING');
+            notify(`Trap: options ${optionBoxes.length}/6`, 'WARNING');
+            return false;
+        }
+
+        const answerInputs = document.querySelectorAll('input[name="riddleanswer[]"]');
+        if (answerInputs.length !== 6) {
+            notify(`Trap: inputs ${answerInputs.length}/6`, 'WARNING');
             return false;
         }
 

@@ -2855,6 +2855,7 @@
         st.running = false;
         st.resumeAfter = 0;
         ctx.store.write(st);
+        location.href = location.href;
         ctx.refreshUi();
         return;
       }

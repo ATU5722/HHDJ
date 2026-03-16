@@ -39,6 +39,78 @@
         'ra': 1, 'rd': 3, 'ts': 0
     };
 
+    // ==================== 缓存统计 ====================
+
+    const CACHE_STATS_KEY = 'DG_PONY_CACHE_STATS';
+    let cacheStats = {
+        attempts: 0,
+        hits: 0,
+        misses: 0,
+        errors: 0,
+        network: 0
+    };
+
+    function loadCacheStats() {
+        try {
+            const raw = localStorage.getItem(CACHE_STATS_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                cacheStats = Object.assign(cacheStats, parsed);
+            }
+        } catch (e) {
+            console.warn('[DG PONY] Failed to load cache stats');
+        }
+    }
+
+    function saveCacheStats() {
+        try {
+            localStorage.setItem(CACHE_STATS_KEY, JSON.stringify(cacheStats));
+        } catch (e) {
+            console.warn('[DG PONY] Failed to save cache stats');
+        }
+    }
+
+    function getHitRatePercent() {
+        const total = cacheStats.hits + cacheStats.misses;
+        if (total === 0) {
+            return 0;
+        }
+        return Math.round((cacheStats.hits / total) * 100);
+    }
+
+    function renderCacheStats() {
+        const existing = document.getElementById('dg-pony-cache-stats');
+        const hitRate = getHitRatePercent();
+        const text = `Cache H:${cacheStats.hits} M:${cacheStats.misses} E:${cacheStats.errors} | Net:${cacheStats.network} | Hit:${hitRate}%`;
+
+        if (existing) {
+            existing.textContent = text;
+            return;
+        }
+
+        const statsEl = document.createElement('div');
+        statsEl.id = 'dg-pony-cache-stats';
+        statsEl.textContent = text;
+        statsEl.style.position = 'fixed';
+        statsEl.style.right = '10px';
+        statsEl.style.bottom = '10px';
+        statsEl.style.padding = '6px 8px';
+        statsEl.style.background = 'rgba(0, 0, 0, 0.65)';
+        statsEl.style.color = '#fff';
+        statsEl.style.fontSize = '12px';
+        statsEl.style.fontFamily = 'monospace';
+        statsEl.style.borderRadius = '4px';
+        statsEl.style.zIndex = '99999';
+        statsEl.style.pointerEvents = 'none';
+        document.body.appendChild(statsEl);
+    }
+
+    function updateCacheStats(updater) {
+        updater(cacheStats);
+        saveCacheStats();
+        renderCacheStats();
+    }
+
     // ==================== API 兼容层 ====================
 
     /**
@@ -162,6 +234,10 @@
      */
     function fetchFromCache(imageUrl) {
         return new Promise((resolve, reject) => {
+            updateCacheStats(stats => {
+                stats.attempts += 1;
+            });
+
             if (!CONFIG.CACHE_PRIORITY) {
                 resolve(null);
                 return;
@@ -180,19 +256,31 @@
                     if (response.status === 200) {
                         // 缓存命中
                         notify('Cache hit', 'INFO');
+                        updateCacheStats(stats => {
+                            stats.hits += 1;
+                        });
                         response.blob().then(resolve).catch(reject);
                     } else {
                         // 缓存未命中
                         console.log('[DG PONY] Cache miss');
+                        updateCacheStats(stats => {
+                            stats.misses += 1;
+                        });
                         resolve(null);
                     }
                 }).catch(() => {
                     // 缓存获取失败
                     console.log('[DG PONY] Cache fetch failed');
+                    updateCacheStats(stats => {
+                        stats.errors += 1;
+                    });
                     resolve(null);
                 });
             } catch (error) {
                 console.warn('[DG PONY] Cache API not available:', error);
+                updateCacheStats(stats => {
+                    stats.errors += 1;
+                });
                 resolve(null);
             }
         });
@@ -206,6 +294,9 @@
     function fetchFromNetwork(imageUrl) {
         return new Promise((resolve, reject) => {
             console.log('[DG PONY] Fetching from network');
+            updateCacheStats(stats => {
+                stats.network += 1;
+            });
 
             // 尝试强制使用缓存（允许网络回退）
             const networkRequest = new Request(imageUrl, {
@@ -221,7 +312,8 @@
                 } else {
                     reject(new Error(`Failed to fetch image: HTTP ${response.status}`));
                 }
-            }).catch(() => {
+            }).catch(error => {
+                console.warn('[DG PONY] Fetch failed');
                 reject(new Error('Network error: Cannot load riddle image'));
             });
         });
@@ -355,6 +447,9 @@
      * 脚本入口
      */
     function init() {
+        loadCacheStats();
+        renderCacheStats();
+
         // 检测是否存在谜题（简化检测逻辑，与 Reborn 保持一致）
         const riddleCounter = document.getElementById('riddlecounter');
         if (riddleCounter) {

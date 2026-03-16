@@ -47,7 +47,8 @@
         hits: 0,
         misses: 0,
         errors: 0,
-        network: 0
+        network: 0,
+        filters: 0
     };
 
     function loadCacheStats() {
@@ -81,7 +82,7 @@
     function renderCacheStats() {
         const existing = document.getElementById('dg-pony-cache-stats');
         const hitRate = getHitRatePercent();
-        const text = `Cache H:${cacheStats.hits} M:${cacheStats.misses} E:${cacheStats.errors} | Net:${cacheStats.network} | Hit:${hitRate}%`;
+        const text = `Cache H:${cacheStats.hits} M:${cacheStats.misses} E:${cacheStats.errors} F:${cacheStats.filters} | Net:${cacheStats.network} | Hit:${hitRate}%`;
 
         if (existing) {
             existing.textContent = text;
@@ -371,12 +372,18 @@
         const optionBoxes = riddlerElement.children;
         // 检查选项数量：真实选项框恰好 6 个，多了说明是陷阱选项框
         if (optionBoxes.length !== 6) {
+            updateCacheStats(stats => {
+                stats.filters += 1;
+            });
             notify(`Trap: options ${optionBoxes.length}/6`, 'WARNING');
             return false;
         }
 
         const answerInputs = document.querySelectorAll('input[name="riddleanswer[]"]');
         if (answerInputs.length !== 6) {
+            updateCacheStats(stats => {
+                stats.filters += 1;
+            });
             notify(`Trap: inputs ${answerInputs.length}/6`, 'WARNING');
             return false;
         }

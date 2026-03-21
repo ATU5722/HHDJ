@@ -31,8 +31,8 @@ const GAME_MECHANICS = {
   DAILY_RESET_RANDOM_MIN_MINUTES: 20, // 每日重置延迟最小分钟数
   DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 30, // 遭遇战间隔最小分钟数（不能少于30）
-  ENCOUNTER_INTERVAL_MAX_MINUTES: 45, // 遭遇战间隔最大分钟数
-  GIFT_MIN_HOURS: 48,              // 自动收礼最小间隔小时
+  ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
+  GIFT_MIN_HOURS: 30,              // 自动收礼最小间隔小时
   GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
@@ -1331,7 +1331,7 @@ const AAD = {
         const onStatusError = handlers.onStatusError;
         let xhr = new window.XMLHttpRequest()
         xhr.open(parm ? 'POST' : 'GET', requestUrl)
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded')
         xhr.responseType = type || 'document'
         xhr.onerror = () => {
           xhr = null

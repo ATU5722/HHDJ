@@ -1,127 +1,189 @@
 // ==UserScript==
 // @name         zdd
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  根据蓝量自动喝大蓝药，根据血量自动喝大红药，等级超过200时自动提升修为
+// @version      1.4
+// @description  自动喝药、自动提升修为，并通过限频 state/room_state 缓解长时间挂机时的页面内存增长
 // @author       Gemini
 // @match        *://cq.xxpc.cc.cd
+// @run-at       document-start
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // ================= 配置区域 =================
-
-    // 触发喝药的蓝量百分比 (例如：80代表蓝量低于80%时触发)
+    // ================= config =================
     const MP_THRESHOLD = 90;
-
-    // 触发喝药的血量百分比 (例如：50代表血量低于50%时触发)
     const HP_POTION_THRESHOLD = 90;
-
-    // 喝药间隔时间，单位为毫秒 (6000 = 6秒)
     const POTION_INTERVAL = 10000;
-
-    // 检查血量和蓝量的频率，单位为毫秒 (1000 = 1秒)
     const CHECK_INTERVAL = 2000;
-
-    // 自动提升修为的等级阈值 (等级大于此值时会尝试提升)
     const CULTIVATION_LEVEL_THRESHOLD = 200;
-
-    // 要使用的药水名称
     const BLUE_POTION_NAME = '大蓝药';
     const RED_POTION_NAME = '大红药';
-
-    // 提升修为按钮的ID
     const CULTIVATION_BUTTON_ID = 'ui-cultivation-upgrade';
+    // ==========================================
 
-    // ============================================
+    // ================= memory mitigation =================
+    const SOCKET_THROTTLE_ENABLED = true;
+    const STATE_EVENT_THROTTLE_MS = 1200;
+    const ROOM_STATE_EVENT_THROTTLE_MS = 450;
+    const CACHE_CLEAN_INTERVAL = 60 * 1000;
+    const IO_HOOK_RETRY_INTERVAL = 1000;
+    const ENABLE_PERIODIC_PAGE_RELOAD = false;
+    const PERIODIC_PAGE_RELOAD_MS = 90 * 60 * 1000;
+    // ===============================================
 
-    // ================= 内存清理配置 ==============
-    // 玩家/怪物缓存过期时间
-    const CACHE_TTL_PLAYER = 3 * 60 * 1000; // 3分钟
-    const CACHE_TTL_MOB = 2 * 60 * 1000; // 2分钟
+    let lastPotionTime = 0;
+    let lastRedPotionTime = 0;
+    let lastCultivationCheckTime = 0;
+    const CULTIVATION_CHECK_INTERVAL = 30000;
 
-    // 缓存上限（避免极端增长）
-    const CACHE_MAX_PLAYER = 80;
-    const CACHE_MAX_MOB = 120;
+    let ioHookInstalled = false;
+    let ioWatchTimer = null;
+    let periodicReloadTimer = null;
+    const socketThrottleState = new WeakMap();
 
-    // 清理周期
-    const CACHE_CLEAN_INTERVAL = 60 * 1000; // 60秒
-
-    // 交易冷却缓存过期时间
-    const CACHE_TTL_TRADE = 5 * 60 * 1000; // 5分钟
-    // ============================================
-
-    let lastPotionTime = 0; // 上次喝蓝药的时间戳
-    let lastRedPotionTime = 0; // 上次喝大红药的时间戳
-    let lastCultivationCheckTime = 0; // 上次检查提升修为的时间戳
-    const CULTIVATION_CHECK_INTERVAL = 30000; // 提升修为检查间隔3秒
-
-    // ================= 内存清理逻辑 ==============
-    const seenCache = {
-        players: new Map(),
-        mobs: new Map()
-    };
-
-    function nowMs() {
-        return Date.now();
+    function getThrottleInterval(eventName) {
+        if (!SOCKET_THROTTLE_ENABLED) return 0;
+        if (eventName === 'room_state') return ROOM_STATE_EVENT_THROTTLE_MS;
+        if (eventName === 'state') return STATE_EVENT_THROTTLE_MS;
+        return 0;
     }
 
-    function updateSeenFromState() {
-        const st = window.lastState;
-        if (!st) return;
-        const t = nowMs();
-        if (st.player && st.player.name) {
-            seenCache.players.set(st.player.name, t);
+    function getSocketEventState(socket, eventName) {
+        let perSocket = socketThrottleState.get(socket);
+        if (!perSocket) {
+            perSocket = new Map();
+            socketThrottleState.set(socket, perSocket);
         }
-        (st.players || []).forEach((p) => {
-            if (p && p.name) seenCache.players.set(p.name, t);
-        });
-        (st.mobs || []).forEach((m) => {
-            if (m && m.name) seenCache.mobs.set(m.name, t);
-        });
+        let state = perSocket.get(eventName);
+        if (!state) {
+            state = {
+                lastAt: 0,
+                pendingPacket: null,
+                timer: null
+            };
+            perSocket.set(eventName, state);
+        }
+        return state;
     }
 
-    function pruneMap(kind, map, ttl, max) {
-        if (!map) return;
-        const t = nowMs();
-        for (const [name] of map) {
-            const last = seenCache[kind].get(name);
-            if (!last || (t - last) > ttl) {
-                map.delete(name);
+    function patchSocketIo(ioObj) {
+        const proto = ioObj && ioObj.Socket && ioObj.Socket.prototype;
+        if (!proto || proto.__guajMemoryHooked) return false;
+        const originalOnevent = proto.onevent;
+        if (typeof originalOnevent !== 'function') return false;
+
+        proto.onevent = function(packet) {
+            const data = packet && packet.data;
+            const eventName = Array.isArray(data) ? data[0] : '';
+            const interval = getThrottleInterval(eventName);
+            if (!interval) {
+                return originalOnevent.call(this, packet);
             }
+
+            const state = getSocketEventState(this, eventName);
+            const now = Date.now();
+            const dispatch = (nextPacket) => {
+                state.lastAt = Date.now();
+                originalOnevent.call(this, nextPacket);
+            };
+
+            if (!state.timer && (now - state.lastAt) >= interval) {
+                return dispatch(packet);
+            }
+
+            state.pendingPacket = packet;
+            if (!state.timer) {
+                const wait = Math.max(0, interval - (now - state.lastAt));
+                state.timer = setTimeout(() => {
+                    state.timer = null;
+                    const nextPacket = state.pendingPacket;
+                    state.pendingPacket = null;
+                    if (nextPacket) {
+                        dispatch(nextPacket);
+                    }
+                }, wait);
+            }
+        };
+
+        proto.__guajMemoryHooked = true;
+        ioHookInstalled = true;
+        console.log(`[memory-opt] socket.io hook installed (state=${STATE_EVENT_THROTTLE_MS}ms, room_state=${ROOM_STATE_EVENT_THROTTLE_MS}ms)`);
+        return true;
+    }
+
+    function installIoHook() {
+        if (patchSocketIo(window.io)) {
+            return true;
         }
-        if (max && map.size > max) {
-            const keys = Array.from(map.keys()).sort((a, b) => {
-                return (seenCache[kind].get(a) || 0) - (seenCache[kind].get(b) || 0);
+        if (ioHookInstalled) {
+            return true;
+        }
+        try {
+            let currentIo = window.io;
+            Object.defineProperty(window, 'io', {
+                configurable: true,
+                enumerable: true,
+                get() {
+                    return currentIo;
+                },
+                set(value) {
+                    currentIo = value;
+                    patchSocketIo(value);
+                    try {
+                        Object.defineProperty(window, 'io', {
+                            configurable: true,
+                            enumerable: true,
+                            writable: true,
+                            value
+                        });
+                    } catch (err) {
+                        console.warn('[memory-opt] restore window.io failed:', err);
+                    }
+                }
             });
-            for (let i = 0; map.size > max && i < keys.length; i += 1) {
-                map.delete(keys[i]);
-            }
+            return false;
+        } catch (err) {
+            console.warn('[memory-opt] window.io hook fallback:', err);
+            return false;
         }
     }
 
-    function pruneTradeCooldown() {
-        const map = window.tradeInviteCooldown;
-        if (!map) return;
-        const t = nowMs();
-        for (const [name, lastAt] of map) {
-            if (!lastAt || (t - lastAt) > CACHE_TTL_TRADE) {
-                map.delete(name);
+    function ensureIoHook() {
+        if (ioHookInstalled) return;
+        installIoHook();
+    }
+
+    function startIoHookWatchdog() {
+        ensureIoHook();
+        if (ioWatchTimer) return;
+        ioWatchTimer = setInterval(() => {
+            if (!ioHookInstalled) {
+                ensureIoHook();
             }
-        }
+        }, IO_HOOK_RETRY_INTERVAL);
+    }
+
+    function startPeriodicPageReload() {
+        if (!ENABLE_PERIODIC_PAGE_RELOAD || periodicReloadTimer) return;
+        periodicReloadTimer = setTimeout(() => {
+            console.log('[memory-opt] periodic reload triggered');
+            window.location.reload();
+        }, PERIODIC_PAGE_RELOAD_MS);
     }
 
     function cleanupExpiredCaches() {
-        if (!window.localHpCache) return;
-        updateSeenFromState();
-        pruneMap('players', window.localHpCache.players, CACHE_TTL_PLAYER, CACHE_MAX_PLAYER);
-        pruneMap('mobs', window.localHpCache.mobs, CACHE_TTL_MOB, CACHE_MAX_MOB);
-        pruneTradeCooldown();
+        ensureIoHook();
+        const strayFloats = document.querySelectorAll('.damage-float');
+        if (strayFloats.length > 80) {
+            Array.from(strayFloats).slice(0, strayFloats.length - 80).forEach((node) => {
+                node.remove();
+            });
+        }
     }
-    // ============================================
 
-    // 通用的药水使用函数
+    startIoHookWatchdog();
+
     function usePotion(potionName, itemList) {
         if (!itemList) return false;
 
@@ -129,14 +191,13 @@
 
         for (let i = 0; i < items.length; i++) {
             if (items[i].textContent.includes(potionName)) {
-                // 提取药水数量
                 const itemText = items[i].textContent;
                 const match = itemText.match(/x(\d+)/);
-                const quantity = match ? parseInt(match[1]) : 0;
+                const quantity = match ? parseInt(match[1], 10) : 0;
 
                 if (quantity > 0) {
-                    items[i].click(); // 触发点击喝药
-                    return { success: true, quantity: quantity };
+                    items[i].click();
+                    return { success: true, quantity };
                 } else {
                     console.log(`[自动喝药] ${potionName} 数量为0，无法使用`);
                     return { success: false, quantity: 0 };
@@ -146,63 +207,49 @@
         return { success: false, quantity: 0 };
     }
 
-    // 获取当前等级
     function getCurrentLevel() {
         const levelElement = document.querySelector('#ui-class');
         if (!levelElement) return 0;
 
         const levelText = levelElement.textContent;
-        // 匹配 "道士 | Lv 201" 或 "战士 | Lv 150" 等格式
         const match = levelText.match(/Lv\s+(\d+)/i);
         if (match && match[1]) {
-            return parseInt(match[1]);
+            return parseInt(match[1], 10);
         }
         return 0;
     }
 
-    // 检查并提升修为
     function checkAndUpgradeCultivation() {
         const now = Date.now();
 
-        // 限制检查频率，避免频繁检查
         if (now - lastCultivationCheckTime < CULTIVATION_CHECK_INTERVAL) {
             return;
         }
         lastCultivationCheckTime = now;
 
-        // 1. 获取当前等级
         const currentLevel = getCurrentLevel();
 
-        // 2. 检查等级是否大于阈值
         if (currentLevel > CULTIVATION_LEVEL_THRESHOLD) {
-            // 3. 查找提升修为按钮
             const upgradeButton = document.getElementById(CULTIVATION_BUTTON_ID);
 
             if (upgradeButton) {
-                // 检查按钮是否可见且可用
                 if (upgradeButton.offsetParent !== null && !upgradeButton.disabled) {
-                    // 获取按钮的title属性，显示消耗等级信息
                     const title = upgradeButton.getAttribute('title') || '';
                     console.log(`[自动提升修为] 当前等级: ${currentLevel}, ${title}, 点击提升修为按钮`);
                     upgradeButton.click();
                 } else {
-                    // 按钮存在但不可用，可能是已经提升过了或者条件不满足
                     console.log(`[自动提升修为] 当前等级: ${currentLevel}, 提升修为按钮存在但不可用`);
                 }
             }
-            // 如果按钮不存在，说明可能已经提升过了，不输出日志避免刷屏
         }
-        // 等级不足时不输出日志，避免刷屏
     }
 
     function checkAndDrinkPotions() {
-        // 1. 获取蓝条和血条元素
         const mpBar = document.querySelector('#bar-mp');
         const hpBar = document.querySelector('.bar-fill.hp');
 
         if (!mpBar || !hpBar) return;
 
-        // 2. 获取当前蓝量和血量百分比
         const mpWidthStr = mpBar.style.width;
         const hpWidthStr = hpBar.style.width;
 
@@ -211,7 +258,6 @@
         const currentMpPercent = parseFloat(mpWidthStr);
         const currentHpPercent = parseFloat(hpWidthStr);
 
-        // 3. 获取当前时间和物品列表
         const now = Date.now();
         const itemsList = document.querySelector('#items-list');
         if (!itemsList) return;
@@ -219,25 +265,20 @@
         let needToDrinkBlue = false;
         let needToDrinkRed = false;
 
-        // 4. 判断是否需要喝蓝药
         if (currentMpPercent < MP_THRESHOLD && (now - lastPotionTime) >= POTION_INTERVAL) {
             needToDrinkBlue = true;
         }
 
-        // 5. 判断是否需要喝红药
         if (currentHpPercent < HP_POTION_THRESHOLD && (now - lastRedPotionTime) >= POTION_INTERVAL) {
             needToDrinkRed = true;
         }
 
-        // 6. 如果同时需要喝蓝药和红药，按顺序执行
         if (needToDrinkBlue && needToDrinkRed) {
-            // 先喝蓝药
             const blueResult = usePotion(BLUE_POTION_NAME, itemsList);
             if (blueResult.success) {
                 lastPotionTime = now;
                 console.log(`[自动喝药] 当前蓝量: ${currentMpPercent.toFixed(2)}% 低于阈值 ${MP_THRESHOLD}%, 已使用 ${BLUE_POTION_NAME}, 剩余数量: ${blueResult.quantity - 1}`);
 
-                // 延迟一小段时间后再喝红药，避免可能的冲突
                 setTimeout(() => {
                     const redResult = usePotion(RED_POTION_NAME, itemsList);
                     if (redResult.success) {
@@ -246,17 +287,13 @@
                     }
                 }, 100);
             }
-        }
-        // 7. 只需要喝蓝药
-        else if (needToDrinkBlue) {
+        } else if (needToDrinkBlue) {
             const blueResult = usePotion(BLUE_POTION_NAME, itemsList);
             if (blueResult.success) {
                 lastPotionTime = now;
                 console.log(`[自动喝药] 当前蓝量: ${currentMpPercent.toFixed(2)}% 低于阈值 ${MP_THRESHOLD}%, 已使用 ${BLUE_POTION_NAME}, 剩余数量: ${blueResult.quantity - 1}`);
             }
-        }
-        // 8. 只需要喝红药
-        else if (needToDrinkRed) {
+        } else if (needToDrinkRed) {
             const redResult = usePotion(RED_POTION_NAME, itemsList);
             if (redResult.success) {
                 lastRedPotionTime = now;
@@ -265,31 +302,30 @@
         }
     }
 
-    // 页面加载完成后启动定时器
     window.addEventListener('load', () => {
-        // 延迟2秒启动，确保网页的元素都已经渲染完毕
         setTimeout(() => {
-            // 自动喝药定时器
             setInterval(() => {
                 checkAndDrinkPotions();
             }, CHECK_INTERVAL);
 
-            // 自动提升修为定时器（使用独立的间隔）
             setInterval(() => {
                 checkAndUpgradeCultivation();
             }, CHECK_INTERVAL);
 
-            console.log(`[自动脚本] 已启动!`);
-            console.log(`  蓝线阈值: ${MP_THRESHOLD}% (大蓝药)`);
-            console.log(`  血线阈值: ${HP_POTION_THRESHOLD}% (大红药)`);
-            console.log(`  喝药间隔: ${POTION_INTERVAL/1000}秒`);
+            startPeriodicPageReload();
+
+            console.log('[自动脚本] 已启动!');
+            console.log(`  蓝线阈值: ${MP_THRESHOLD}% (${BLUE_POTION_NAME})`);
+            console.log(`  血线阈值: ${HP_POTION_THRESHOLD}% (${RED_POTION_NAME})`);
+            console.log(`  喝药间隔: ${POTION_INTERVAL / 1000}秒`);
             console.log(`  检查频率: ${CHECK_INTERVAL}ms`);
             console.log(`  提升修为等级阈值: > ${CULTIVATION_LEVEL_THRESHOLD}级`);
-            console.log(`  内存清理间隔: ${CACHE_CLEAN_INTERVAL/1000}秒`);
-            console.log(`  缓存上限: 玩家${CACHE_MAX_PLAYER}/怪物${CACHE_MAX_MOB}`);
+            console.log(`  state 限频: ${STATE_EVENT_THROTTLE_MS}ms`);
+            console.log(`  room_state 限频: ${ROOM_STATE_EVENT_THROTTLE_MS}ms`);
+            console.log(`  清理周期: ${CACHE_CLEAN_INTERVAL / 1000}秒`);
+            console.log(`  定时硬刷新: ${ENABLE_PERIODIC_PAGE_RELOAD ? `${Math.floor(PERIODIC_PAGE_RELOAD_MS / 60000)}分钟` : '关闭'}`);
         }, 2000);
 
-        // 内存清理定时器
         setInterval(() => {
             cleanupExpiredCaches();
         }, CACHE_CLEAN_INTERVAL);

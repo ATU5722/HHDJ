@@ -3474,10 +3474,16 @@
       ctx.store.write(st);
       ctx.refreshUi();
 
-      for (let i = 0; i < sellingList.length; i += 1) {
+      const remaining = [...sellingList];
+      let done = 0;
+      while (remaining.length > 0) {
         const latest = ctx.store.read();
         if (!latest.running || latest.startedAt !== st.startedAt || latest.mode !== st.mode || latest.world !== st.world) return;
-        const it = sellingList[i];
+        const idx = Math.random() < 0.72
+          ? Math.floor(Math.random() * remaining.length)
+          : 0;
+        const it = remaining[idx];
+        remaining.splice(idx, 1);
         const itemId = extractItemId(it.link);
         if (!itemId) continue;
         const token = await fetchFreshMarketToken(world, currentFilter, itemId);
@@ -3485,7 +3491,8 @@
         const href = `${buildBrowseUrl(world, currentFilter)}${it.link}`;
         const params = buildSellOrderParams(token, it.stock, it.price, it.sellorderUpdate);
         await postForm(href, params);
-        latest.pageDone = i + 1;
+        done++;
+        latest.pageDone = done;
         ctx.store.write(latest);
         ctx.refreshUi();
         await runDelay(3000, 6000);

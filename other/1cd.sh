@@ -152,7 +152,7 @@ function install_guacamole_ubuntu_debian
 	echo 
 	say @B"Setting up dependencies..." yellow
 	echo 
-	apt-get update
+	apt-get update && apt-get upgrade -y
 	if [ "$OS" = "UBUNTU24" ] ; then
 		apt-get install libjpeg-turbo8-dev language-pack-zh* -y
 		apt-get install wget curl gcc sudo zip unzip tar perl expect build-essential libcairo2-dev libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev freerdp2-dev libssh2-1-dev libtelnet-dev libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev libssl-dev libpango1.0-dev libswscale-dev libavcodec-dev libavutil-dev libavformat-dev chinese* fonts-arphic-ukai fonts-arphic-uming -y
@@ -374,7 +374,7 @@ function install_rdp
 	if [ "$OS" = "UBUNTU24" ] ; then
 		say @B"Disabling unnecessary LightDM display manager..." yellow
 	fi
-	apt-get install xfce4 xrdp -y
+	apt-get install xfce4 xfce4-goodies xrdp -y
 	mkdir -p /etc/systemd/system/xrdp.service.d
 	cat > /etc/systemd/system/xrdp.service.d/oom.conf <<END
 [Service]
@@ -421,7 +421,7 @@ if test -r /etc/default/locale; then
 fi
 
 
- xfce4-session
+xfce4-session
 
 test -x /etc/X11/Xsession && exec /etc/X11/Xsession
 exec /bin/sh /etc/X11/Xsession
@@ -667,7 +667,7 @@ END
 	ufw --force disable
 	ufw default deny incoming
 	ufw default allow outgoing
-	ufw allow 22/tcp
+	ufw limit 22/tcp
 	ufw allow 80/tcp
 	ufw allow 443/tcp
 	ufw --force enable

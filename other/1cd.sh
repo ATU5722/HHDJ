@@ -320,7 +320,8 @@ function enforce_guacd_ipv4
 	cat > /etc/systemd/system/guacd.service.d/override.conf <<END
 [Service]
 ExecStart=
-ExecStart=$guacd_bin -b 127.0.0.1 -l 4822
+Type=simple
+ExecStart=$guacd_bin -f -b 127.0.0.1 -l 4822
 Restart=on-failure
 RestartSec=5
 OOMScoreAdjust=-500
@@ -428,7 +429,6 @@ exec /bin/sh /etc/X11/Xsession
 
 END
 	chmod +x /etc/xrdp/startwm.sh
-	systemctl enable xrdp
 	systemctl restart xrdp
 	sleep 5
 	echo "Waiting to start XRDP server..."
@@ -563,18 +563,21 @@ function install_chromium
 	mkdir -p $CHROMIUM_DIR
 	cd $CHROMIUM_DIR
 
-	LASTCHANGE_URL="https://www.googleapis.com/download/storage/v1/b/chromium-browser-snapshots/o/Linux_x64%2FLAST_CHANGE?alt=media"
+	LASTCHANGE_URL="https://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64/LAST_CHANGE"
 	REVISION=$(curl -sS "$LASTCHANGE_URL")
+		if [ -z "$REVISION" ]; then
+			REVISION=$(wget -qO- "$LASTCHANGE_URL")
+		fi
 
 	if [ -z "$REVISION" ]; then
 		say "Failed to fetch latest Chromium revision." red
-		exit 1
+		return
 	fi
 
 	echo "Latest Chromium revision: $REVISION"
 
 	if [ ! -d "$REVISION/chrome-linux" ]; then
-		ZIP_URL="https://www.googleapis.com/download/storage/v1/b/chromium-browser-snapshots/o/Linux_x64%2F$REVISION%2Fchrome-linux.zip?alt=media"
+		ZIP_URL="https://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64/$REVISION/chrome-linux.zip"
 		mkdir -p $REVISION
 		cd $REVISION
 		curl -sS -L "$ZIP_URL" -o chrome-linux.zip
@@ -588,14 +591,14 @@ function install_chromium
 
 	if [ ! -f ./latest/chrome ]; then
 		say "Chromium binary not found after extraction." red
-		exit 1
+		return
 	fi
 
 	mkdir -p /home/atu/.config/openbox
 	mkdir -p /home/atu/.config/chromium-user-data
 	cat > /home/atu/.config/openbox/autostart <<'EOF'
 #!/bin/bash
-/opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --no-first-run --single-process --enable-low-end-device-mode --js-flags="--max-old-space-size=64" --disk-cache-size=10485760 --user-data-dir=/home/atu/.config/chromium-user-data &
+/opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --no-first-run --disable-extensions --disable-sync --disable-translate --disable-default-apps --js-flags="--max-old-space-size=64" --user-data-dir=/home/atu/.config/chromium-user-data &
 echo 1000 > /proc/$!/oom_score_adj
 EOF
 	chown -R atu:atu /home/atu/.config/openbox /home/atu/.config/chromium-user-data

@@ -1,6 +1,6 @@
 ﻿// ==UserScript==
 // @name         AADB
-// @version      3.3.10
+// @version      3.4.3
 // @author       D 
 // @include      http*://hentaiverse.org/*
 // @include      http*://alt.hentaiverse.org/*
@@ -28,11 +28,11 @@
 const GAME_MECHANICS = {
   BUFF_SLOT_LIMIT: 6,              // Buff槽位上限（不要修改）
   DEBUFF_EFFECTIVE_TURNS: 2,       // Debuff有效回合阈值（谨慎修改）
-  DAILY_RESET_RANDOM_MIN_MINUTES: 20, // 每日重置延迟最小分钟数
-  DAILY_RESET_RANDOM_MAX_MINUTES: 160, // 每日重置延迟最大分钟数
+  DAILY_RESET_RANDOM_MIN_MINUTES: 10, // 每日重置延迟最小分钟数
+  DAILY_RESET_RANDOM_MAX_MINUTES: 300, // 每日重置延迟最大分钟数
   ENCOUNTER_INTERVAL_MIN_MINUTES: 30, // 遭遇战间隔最小分钟数（不能少于30）
   ENCOUNTER_INTERVAL_MAX_MINUTES: 50, // 遭遇战间隔最大分钟数
-  GIFT_MIN_HOURS: 30,              // 自动收礼最小间隔小时
+  GIFT_MIN_HOURS: 60,              // 自动收礼最小间隔小时
   GIFT_MAX_HOURS: 72,              // 自动收礼最大间隔小时
   AOE_T3_RANGE_ISEKAI: 9,          // 异世界T3施法范围
 };
@@ -71,7 +71,8 @@ const dbTableColumnsAll = {
     { column_name: '小马图', field: 'horse', id: 'col_horse', default: false },
     { column_name: '火花', field: 'spark', id: 'col_spark', default: false },
     { column_name: '传说', field: 'legendary', tooltip: 'legendary_details', id: 'col_legendary', default: false },
-    { column_name: '无双', field: 'peerless', tooltip: 'peerless_details', id: 'col_peerless', default: false }
+    { column_name: '无双', field: 'peerless', tooltip: 'peerless_details', id: 'col_peerless', default: false },
+    { column_name: '删除', field: 'delete_action', id: 'col_delete', default: false }
   ],
   '收入消耗': [
     { column_name: '经验', field: 'exp', tooltip: 'exp_details', id: 'col_exp', default: false },
@@ -337,6 +338,9 @@ const AAD = {
     // 页面刷新，重新初始化脚本
     refreshPage() {
       window.location.href = window.location;
+      setTimeout(() => {
+        window.location.href = window.location;
+      }, 6000);
     }
   },
 
@@ -347,7 +351,7 @@ const AAD = {
       config1: {
         name: '元素法师',
         description: '基本设置，可用于AR ,40锻造可用于 GF，设置法系后使用',
-        config: JSON.parse('{"channelSkillSwitch":true,"buffSkillSwitch":true,"debuffSkillSwitch":true,"scrollSwitch":true,"dataRecordSwitch":true,"autoshard":true,"autoshardlist":"FC","autobuylist":"MP,SP,SW,SC,EC","staminaLow":15,"item":{"Cure":true,"FC":true,"HP":true,"HE":true,"MP":true,"ME":true,"SP":true,"SE":true,"LE":true,"ED":true,"HealthGem":true,"ManaGem":true,"SpiritGem":true,"MysticGem":true},"itemCureCondition":{"0":["hp,4,35","roundType,6,\u0027gr\u0027"],"1":["hp,4,45","hp,3,23","roundType,5,\u0027gr\u0027"],"2":["hp,4,48","_isCd_313,5,1","_isCd_11195,5,1"],"3":["hp,4,48","_isCd_313,5,1","roundNow,3,700"],"4":["hp,4,55","hp,3,23","sp,4,45"]},"itemFCCondition":{"0":["hp,4,21"],"1":["hp,4,23","roundType,5,\u0027gr\u0027"]},"itemHPCondition":{"0":["hp,4,30","roundType,6,\u0027gr\u0027"],"1":["hp,4,30","hp,3,23"],"2":["hp,4,25","_isCd_313,5,1"]},"itemHECondition":{"0":["hp,4,21","roundType,6,\u0027gr\u0027"],"1":["hp,4,1"]},"itemMPCondition":{"0":["mp,4,38"],"2":["mp,4,55","roundType,5,\u0027gr\u0027","roundNow,1,500"]},"itemMECondition":{"0":["mp,4,12"],"1":["mp,4,30","_buffTurn_sparklife,5,0"]},"itemSPCondition":{"0":["sp,4,45"],"1":["sp,4,55","roundType,5,\u0027gr\u0027"]},"itemSECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemLECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemEDCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,5,300"],"1":["roundType,5,\u0027gr\u0027","roundNow,5,600"]},"itemManaGemCondition":{"0":["mp,2,80"]},"channelSkill":{"AF":true,"Re":true},"channelSkillAFCondition":{"0":["_buffTurn_arcanemeditation,2,150"]},"channelSkillReCondition":{"0":["_buffTurn_regen,2,100"]},"buffSkill":{"HD":true,"MD":true,"SD":true,"AF":true,"Re":true},"buffSkillHDCondition":{"0":["hp,2,70"],"1":["hp,2,90","roundType,5,\u0027gr\u0027"]},"buffSkillMDCondition":{"0":["mp,2,80","roundType,6,\u0027ba\u0027"],"1":["mp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,100"]},"buffSkillSDCondition":{"0":["sp,2,70","roundType,6,\u0027ba\u0027"],"1":["sp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,500"]},"buffSkillAFCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"buffSkillReCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"sleepRatio":0,"magnetRatio":0,"debuffSkillAllWeak":true,"weakRatio":1,"debuffSkillallweakCondition":{"0":["roundNow,5,95","roundAll,5,95","roundType,5,\u0027ar\u0027"],"1":["roundNow,5,100","roundAll,5,100","roundType,5,\u0027ar\u0027"],"2":["sp,4,41","roundType,5,\u0027gr\u0027"],"3":["sp,4,51","roundType,5,\u0027gr\u0027","roundNow,3,600"]},"silenceRatio":0,"debuffSkillAllIm":true,"impRatio":1,"debuffSkill":{"Si":true},"debuffSkillSiCondition":{"0":["roundNow,5,100","roundType,5,\u0027ar\u0027"]},"scrollFirst":true,"scroll":{"Pr":true,"Sw":true,"Li":true,"Sh":true},"scrollPrCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollSwCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollLiCondition":{"0":["sp,2,50"],"1":["_buffTurn_sparklife,5,0","_isCd_11395,5,1","_isCd_313,5,1","_isCd_11195,5,1"]},"scrollShCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,630"]},"presetSelector":"","dbBackupListLast":"","themeSelector":"white","delayReload":true,"pauseButton":true,"itemOrder":["SP","LE","SE","MP","ME","Cure","FC","HP","HE"],"channelSkillOrder":["AF","Re"],"buffSkillOrder":["Re","AF"],"debuffSkillOrder":["Si"]}')
+        config: JSON.parse('{"channelSkillSwitch":true,"buffSkillSwitch":true,"debuffSkillSwitch":true,"scrollSwitch":true,"dataRecordSwitch":true,"autoshard":true,"autoshardlist":"FC","autobuylist":"MP,SP,SW,SC,EC","staminaLow":21,"item":{"Cure":true,"FC":true,"HP":true,"HE":true,"MP":true,"ME":true,"SP":true,"SE":true,"LE":true,"ED":true,"HealthGem":true,"ManaGem":true,"SpiritGem":true,"MysticGem":true},"itemCureCondition":{"0":["hp,4,35","roundType,6,\u0027gr\u0027"],"1":["hp,4,45","hp,3,23","roundType,5,\u0027gr\u0027"],"2":["hp,4,48","_isCd_313,5,1","_isCd_11195,5,1"],"3":["hp,4,48","_isCd_313,5,1","roundNow,3,700"],"4":["hp,4,55","hp,3,23","sp,4,45"]},"itemFCCondition":{"0":["hp,4,21"],"1":["hp,4,23","roundType,5,\u0027gr\u0027"]},"itemHPCondition":{"0":["hp,4,30","roundType,6,\u0027gr\u0027"],"1":["hp,4,30","hp,3,23"],"2":["hp,4,25","_isCd_313,5,1"]},"itemHECondition":{"0":["hp,4,21","roundType,6,\u0027gr\u0027"],"1":["hp,4,1"]},"itemMPCondition":{"0":["mp,4,38"],"2":["mp,4,55","roundType,5,\u0027gr\u0027","roundNow,1,500"]},"itemMECondition":{"0":["mp,4,12"],"1":["mp,4,30","_buffTurn_sparklife,5,0"]},"itemSPCondition":{"0":["sp,4,45"],"1":["sp,4,55","roundType,5,\u0027gr\u0027"]},"itemSECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemLECondition":{"0":["sp,4,31","_scrollTurn_sparklife,5,0","roundNow,4,800"],"1":["sp,4,16","_scrollTurn_sparklife,6,0"],"2":["sp,4,31","_scrollTurn_sparklife,5,0","_isCd_13221,5,1"]},"itemEDCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,5,300"],"1":["roundType,5,\u0027gr\u0027","roundNow,5,600"]},"itemManaGemCondition":{"0":["mp,2,80"]},"channelSkill":{"AF":true,"Re":true},"channelSkillAFCondition":{"0":["_buffTurn_arcanemeditation,2,150"]},"channelSkillReCondition":{"0":["_buffTurn_regen,2,100"]},"buffSkill":{"HD":true,"MD":true,"SD":true,"AF":true,"Re":true},"buffSkillHDCondition":{"0":["hp,2,70"],"1":["hp,2,90","roundType,5,\u0027gr\u0027"]},"buffSkillMDCondition":{"0":["mp,2,80","roundType,6,\u0027ba\u0027"],"1":["mp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,100"]},"buffSkillSDCondition":{"0":["sp,2,70","roundType,6,\u0027ba\u0027"],"1":["sp,2,90","roundType,5,\u0027gr\u0027","roundNow,3,500"]},"buffSkillAFCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"buffSkillReCondition":{"0":["roundAll,6,1","monsterAlive,4,4"],"1":["roundAll,5,1","bossAll,1,1"],"2":["roundAll,6,1","bossAll,2,1","roundNow,5,1"]},"sleepRatio":0,"magnetRatio":0,"debuffSkillAllWeak":true,"weakRatio":1,"debuffSkillallweakCondition":{"0":["roundNow,5,95","roundAll,5,95","roundType,5,\u0027ar\u0027"],"1":["roundNow,5,100","roundAll,5,100","roundType,5,\u0027ar\u0027"],"2":["sp,4,41","roundType,5,\u0027gr\u0027"],"3":["sp,4,51","roundType,5,\u0027gr\u0027","roundNow,3,600"]},"silenceRatio":0,"debuffSkillAllIm":true,"impRatio":1,"debuffSkill":{"Si":true},"debuffSkillSiCondition":{"0":["roundNow,5,100","roundType,5,\u0027ar\u0027"]},"scrollFirst":true,"scroll":{"Pr":true,"Sw":true,"Li":true,"Sh":true},"scrollPrCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollSwCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,270"]},"scrollLiCondition":{"0":["sp,2,50"],"1":["_buffTurn_sparklife,5,0","_isCd_11395,5,1","_isCd_313,5,1","_isCd_11195,5,1"]},"scrollShCondition":{"0":["roundType,5,\u0027gr\u0027","roundNow,1,630"]},"presetSelector":"","dbBackupListLast":"","themeSelector":"white","delayReload":true,"pauseButton":true,"itemOrder":["SP","LE","SE","MP","ME","Cure","FC","HP","HE"],"channelSkillOrder":["AF","Re"],"buffSkillOrder":["Re","AF"],"debuffSkillOrder":["Si"]}')
       },
       config2: {
         name: '单手盾',
@@ -799,6 +803,18 @@ const AAD = {
           console.error('[Database] 保存战斗数据失败:', error);
           throw error;
         }
+      },
+
+      async deleteBattleById(recordId) {
+        if (!recordId) return false;
+        const db = await this.init();
+        const transaction = db.transaction([this.storeName], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        return new Promise((resolve, reject) => {
+          const request = store.delete(recordId);
+          request.onsuccess = () => resolve(true);
+          request.onerror = () => reject(request.error);
+        });
       },
 
       // 保存战斗记录（私有方法）
@@ -1821,7 +1837,93 @@ const AAD = {
   Logic: {
     // 战斗核心逻辑模块
     Battle: {
-      delayReloadTimer: null,
+      logWatchdogTimer: null,
+      logObserver: null,
+      lastLogCount: 0,
+
+      getLogWatchdogDelay(option) {
+        const delaySeconds = Number(option && option.delayReloadTime);
+        return Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds * 1000 : 60000;
+      },
+
+      getBattleLogCount() {
+        const logBody = AAD.Utils.DOM.gE('#textlog>tbody');
+        return logBody ? logBody.children.length : 0;
+      },
+
+      shouldRunLogWatchdog(option = AAD.Core.Storage.getValue('option') || {}) {
+        if (!option.delayReload) return false;
+        if (AAD.Core.Storage.getValue('disabled') || AAD.Core.Storage.getValue('missanswer')) return false;
+        if (AAD.Utils.DOM.gE('#riddlecounter')) return false;
+        return true;
+      },
+
+      resetLogWatchdog() {
+        if (this.logWatchdogTimer) {
+          clearTimeout(this.logWatchdogTimer);
+          this.logWatchdogTimer = null;
+        }
+
+        const option = AAD.Core.Storage.getValue('option') || {};
+        if (!this.shouldRunLogWatchdog(option)) return;
+
+        this.logWatchdogTimer = setTimeout(() => {
+          this.triggerLogWatchdogRefresh();
+        }, this.getLogWatchdogDelay(option));
+      },
+
+      triggerLogWatchdogRefresh() {
+        if (!this.shouldRunLogWatchdog()) {
+          this.stopLogWatchdog();
+          return;
+        }
+
+        AAD.Runtime.refreshPage();
+      },
+
+      bindLogObserver() {
+        if (this.logObserver) {
+          this.logObserver.disconnect();
+          this.logObserver = null;
+        }
+
+        const logContainer = AAD.Utils.DOM.gE('#textlog');
+        if (!logContainer) {
+          this.lastLogCount = 0;
+          this.resetLogWatchdog();
+          return;
+        }
+
+        this.lastLogCount = this.getBattleLogCount();
+        this.logObserver = new MutationObserver(() => {
+          const currentCount = this.getBattleLogCount();
+          if (currentCount === this.lastLogCount) return;
+
+          this.lastLogCount = currentCount;
+          this.resetLogWatchdog();
+        });
+
+        this.logObserver.observe(logContainer, { childList: true, subtree: true });
+        this.resetLogWatchdog();
+      },
+
+      startLogWatchdog() {
+        this.stopLogWatchdog();
+        if (!this.shouldRunLogWatchdog()) return;
+        this.bindLogObserver();
+      },
+
+      stopLogWatchdog() {
+        if (this.logWatchdogTimer) {
+          clearTimeout(this.logWatchdogTimer);
+          this.logWatchdogTimer = null;
+        }
+        if (this.logObserver) {
+          this.logObserver.disconnect();
+          this.logObserver = null;
+        }
+        this.lastLogCount = 0;
+      },
 
       // 主战斗循环 
       main() {
@@ -2077,11 +2179,6 @@ const AAD = {
         eventStart.id = 'eventStart';
         eventStart.onclick = () => {
           const info = unsafeWindow.info;
-          if (option.delayReload) {
-            const delayReload = setTimeout(AAD.Runtime.refreshPage, option.delayReloadTime * 1000);
-            // 存储延时重载ID以便后续清除
-            this.delayReloadTimer = delayReload;
-          }
 
           if (option.dataRecordSwitch) {
             // 为基础动作注入mode值
@@ -2118,10 +2215,6 @@ const AAD = {
           const runSpeed = (1000 / (timeNow - AAD.Core.State.get('timeNow', timeNow))).toFixed(2);
           AAD.Core.State.set('runSpeed', runSpeed);
           AAD.Core.State.set('timeNow', timeNow);
-
-          if (option.delayReload) {
-            clearTimeout(this.delayReloadTimer);
-          }
 
           // 更新怪物状态
           const monsterDead = AAD.Utils.DOM.gE('img[src*="nbardead"]', 'all').length;
@@ -2211,6 +2304,7 @@ const AAD = {
                 const event = new Event('DOMContentLoaded');
                 document.dispatchEvent(event);
 
+                AAD.Logic.Battle.bindLogObserver();
                 AAD.Logic.Battle.newRound();
                 AAD.Logic.Battle.initBattleState();
                 AAD.Logic.PageHandler.misspony();
@@ -2218,8 +2312,12 @@ const AAD = {
               });
             } else if (isDefeat || isVictory) {
               // 战斗结束（胜利/战败）
+              if (isDefeat) {
+                this.handleDefeatShutdown();
+              }
               AAD.Core.Storage.delValue(2); // 清理战斗相关存储
               AAD.Core.Storage.clearBattleCache(); // 清除DOM缓存
+              this.stopLogWatchdog();
 
               if (option.autoquit) {
                 setTimeout(AAD.Runtime.refreshPage, AAD.Utils.Time.getRandomDelayMs(2000, 5000));
@@ -2231,6 +2329,7 @@ const AAD = {
           }
         };
         document.body.appendChild(eventEnd);
+        this.startLogWatchdog();
 
         // 设置会话存储
         window.sessionStorage.delay = option.delay || 0;
@@ -2289,6 +2388,27 @@ const AAD = {
           return false;
         }.toString();
         document.head.appendChild(fakeApiResponse);
+      },
+
+      handleDefeatShutdown() {
+        const option = AAD.Core.Storage.getValue('option') || {};
+        if (!option.defeatShutdown) {
+          return;
+        }
+
+        if (!option.idleArena && !option.autoIW) {
+          return;
+        }
+
+        const nextOption = { ...option, idleArena: false, autoIW: false };
+        AAD.Core.Storage.setValue('option', nextOption);
+        AAD.Core.State.set('option', nextOption);
+
+        const idleArenaToggleButton = document.getElementById('idleArenaToggleButton');
+        if (idleArenaToggleButton) {
+          idleArenaToggleButton.textContent = '自动AR:关';
+        }
+
       },
 
       // 使用Channel技能
@@ -3970,10 +4090,6 @@ const AAD = {
       },
 
       async runAutoIW() {
-        if (!AAD.Runtime.isIsekai()) {
-          return;
-        }
-
         const option = AAD.Core.Storage.getValue('option') || {};
         if (!option.autoIW) {
           return;
@@ -6322,16 +6438,16 @@ const AAD = {
             <span class="dbTipText">中阶技能使用条件</span> <div class="customize" name="middleSkillCondition"></div>
             <span class="dbTipText">高阶技能使用条件</span> <div class="customize" name="highSkillCondition"></div>
           </div>
-          <div><input id="turnOnSS" type="checkbox"><label for="turnOnSS"><b>开启Spirit Stance</b></label> <div class="customize" name="turnOnSSCondition"></div></div>
-          <div><input id="turnOffSS" type="checkbox"><label for="turnOffSS"><b>关闭Spirit Stance</b></label> <div class="customize" name="turnOffSSCondition"></div></div>
-          <div><input id="defend" type="checkbox"><label for="defend"><b>Defend</b></label> <div class="customize" name="defendCondition"></div></div>
-          <div><input id="focus" type="checkbox"><label for="focus"><b>Focus</b></label> <div class="customize" name="focusCondition"></div></div>
-          <div><input id="etherTap" type="checkbox"><label for="etherTap"><b>Ether Tap</b></label> <div class="customize" name="etherTapCondition"></div></div>
+          <div><input id="turnOnSS" type="checkbox"><label for="turnOnSS"><b>开启灵动架势</b></label> <div class="customize" name="turnOnSSCondition"></div></div>
+          <div><input id="turnOffSS" type="checkbox"><label for="turnOffSS"><b>关闭灵动架势</b></label> <div class="customize" name="turnOffSSCondition"></div></div>
+          <div><input id="defend" type="checkbox"><label for="defend"><b>防御</b></label> <div class="customize" name="defendCondition"></div></div>
+          <div><input id="focus" type="checkbox"><label for="focus"><b>专注</b></label> <div class="customize" name="focusCondition"></div></div>
+          <div><input id="etherTap" type="checkbox"><label for="etherTap"><b>法力回流</b></label> <div class="customize" name="etherTapCondition"></div></div>
           <div><b>攻击规则</b><br>
             <span class="dbTipText">每回合按当前血量计算基础权重：最低血量的敌人为 10，其它敌人按 当前血量 / 最低血量 × 10 计算。基础权重会与下方各状态权重相加。</span><br>
-            <span class="dbTipText">Weaken <input class="dbNumber" name="weight_We" placeholder="0" type="text"> Imperil <input class="dbNumber" name="weight_Im" placeholder="0" type="text"> Sleep <input class="dbNumber" name="weight_Sle" placeholder="0" type="text"> Silence <input class="dbNumber" name="weight_Si" placeholder="0" type="text"> MagNet <input class="dbNumber" name="weight_MN" placeholder="0" type="text"></span><br>
-            <span class="dbTipText">Stunned <input class="dbNumber" name="weight_Stun" placeholder="0" type="text"> Confuse <input class="dbNumber" name="weight_Co" placeholder="0" type="text"> Drain <input class="dbNumber" name="weight_Dr" placeholder="0" type="text"> Slow <input class="dbNumber" name="weight_Slo" placeholder="0" type="text"> Blind <input class="dbNumber" name="weight_Bl" placeholder="0" type="text"></span><br>
-            <span class="dbTipText">Coalesced Mana <input class="dbNumber" name="weight_CM" placeholder="0" type="text"> Penetrated Armor <input class="dbNumber" name="weight_PA" placeholder="0" type="text"> Bleeding Wound <input class="dbNumber" name="weight_BW" placeholder="0" type="text"></span></div>
+            <span class="dbTipText">虚弱 <input class="dbNumber" name="weight_We" placeholder="0" type="text"> 陷危 <input class="dbNumber" name="weight_Im" placeholder="0" type="text"> 沉眠 <input class="dbNumber" name="weight_Sle" placeholder="0" type="text"> 沉默 <input class="dbNumber" name="weight_Si" placeholder="0" type="text"> 定身 <input class="dbNumber" name="weight_MN" placeholder="0" type="text"></span><br>
+            <span class="dbTipText">眩晕 <input class="dbNumber" name="weight_Stun" placeholder="0" type="text"> 混乱 <input class="dbNumber" name="weight_Co" placeholder="0" type="text"> 枯竭 <input class="dbNumber" name="weight_Dr" placeholder="0" type="text"> 减速 <input class="dbNumber" name="weight_Slo" placeholder="0" type="text"> 致盲 <input class="dbNumber" name="weight_Bl" placeholder="0" type="text"></span><br>
+            <span class="dbTipText">破甲 <input class="dbNumber" name="weight_PA" placeholder="0" type="text"> 流血 <input class="dbNumber" name="weight_BW" placeholder="0" type="text"> 法力合流 <input class="dbNumber" name="weight_CM" placeholder="0" type="text"></span></div>
           <div><input id="ruleReverse" type="checkbox"><label for="ruleReverse">勾选攻击权重最最大，不勾选攻击权重最小</label></div>
           <div><input id="ruleOrder" type="checkbox"><label for="ruleOrder">塔内顺序攻击</label></div>
           <div><input id="ruleOrderGlobal" type="checkbox"><label for="ruleOrderGlobal">全局顺序攻击</label></div>
@@ -6349,7 +6465,7 @@ const AAD = {
             <div id="dbArenaLevels" class="dbArenaLevels">
               <input id="arLevel_1" value="1" type="checkbox"><label for="arLevel_1">1</label> <input id="arLevel_10" value="3" type="checkbox"><label for="arLevel_10">10</label> <input id="arLevel_20" value="5" type="checkbox"><label for="arLevel_20">20</label> <input id="arLevel_30" value="8" type="checkbox"><label for="arLevel_30">30</label> <input id="arLevel_40" value="9" type="checkbox"><label for="arLevel_40">40</label> <input id="arLevel_50" value="11" type="checkbox"><label for="arLevel_50">50</label> <input id="arLevel_60" value="12" type="checkbox"><label for="arLevel_60">60</label> <input id="arLevel_70" value="13" type="checkbox"><label for="arLevel_70">70</label> <input id="arLevel_80" value="15" type="checkbox"><label for="arLevel_80">80</label> <input id="arLevel_90" value="16" type="checkbox"><label for="arLevel_90">90</label> <input id="arLevel_100" value="17" type="checkbox"><label for="arLevel_100">100</label> <input id="arLevel_110" value="19" type="checkbox"><label for="arLevel_110">110</label> <input id="arLevel_120" value="20" type="checkbox"><label for="arLevel_120">120</label><br>
               <input id="arLevel_130" value="21" type="checkbox"><label for="arLevel_130">130</label> <input id="arLevel_140" value="23" type="checkbox"><label for="arLevel_140">140</label> <input id="arLevel_150" value="24" type="checkbox"><label for="arLevel_150">150</label> <input id="arLevel_165" value="26" type="checkbox"><label for="arLevel_165">165</label> <input id="arLevel_180" value="27" type="checkbox"><label for="arLevel_180">180</label> <input id="arLevel_200" value="28" type="checkbox"><label for="arLevel_200">200</label> <input id="arLevel_225" value="29" type="checkbox"><label for="arLevel_225">225</label> <input id="arLevel_250" value="32" type="checkbox"><label for="arLevel_250">250</label> <input id="arLevel_300" value="33" type="checkbox"><label for="arLevel_300">300</label><input id="arLevel_400" value="34" type="checkbox"><label for="arLevel_400">400</label><input id="arLevel_500" value="35" type="checkbox"><label for="arLevel_500">500</label><br>
-              <input id="arLevel_RB50" value="105" type="checkbox"><label for="arLevel_RB50">RB50</label> <input id="arLevel_RB75A" value="106" type="checkbox"><label for="arLevel_RB75A">RB75A</label> <input id="arLevel_RB75B" value="107" type="checkbox"><label for="arLevel_RB75B">RB75B</label> <input id="arLevel_RB75C" value="108" type="checkbox"><label for="arLevel_RB75C">RB75C</label> <input id="arLevel_RB200" value="111" type="checkbox"><label for="arLevel_RB200">RB200</label> <input id="arLevel_RB250" value="112" type="checkbox"><label for="arLevel_RB250">RB250</label><br>
+              <input id="arLevel_RB50" value="105" type="checkbox"><label for="arLevel_RB50">RB50</label> <input id="arLevel_RB75A" value="106" type="checkbox"><label for="arLevel_RB75A">RB75A</label> <input id="arLevel_RB75B" value="107" type="checkbox"><label for="arLevel_RB75B">RB75B</label> <input id="arLevel_RB75C" value="108" type="checkbox"><label for="arLevel_RB75C">RB75C</label> <input id="arLevel_RB100" value="109" type="checkbox"><label for="arLevel_RB100">RB100</label> <input id="arLevel_RB150" value="110" type="checkbox"><label for="arLevel_RB150">RB150</label> <input id="arLevel_RB200" value="111" type="checkbox"><label for="arLevel_RB200">RB200</label> <input id="arLevel_RB250" value="112" type="checkbox"><label for="arLevel_RB250">RB250</label><br>
               <input id="arLevel_TW" value="tw" type="checkbox"><label for="arLevel_TW">TW(isk)</label> <input id="arLevel_GF" value="gr" type="checkbox"><label for="arLevel_GF">GF <input class="dbNumber" name="idleArenaGrTime" placeholder="0" type="text"></label>
             </div>
           </div>
@@ -6368,6 +6484,7 @@ const AAD = {
           </div>
           <div><input id="encounter" type="checkbox"><label for="encounter"><b>自动遭遇</b></label> <button class="encounterResetPlan">重置计划</button> <input class="dbNumber" name="encounterDailyMin" placeholder="12" type="text">~<input class="dbNumber" name="encounterDailyMax" placeholder="24" type="text"></div>
           <div><input id="autoquit" type="checkbox"><label for="autoquit"><b>自动出场</b></label></div>
+          <div><input id="defeatShutdown" type="checkbox"><label for="defeatShutdown"><b>战败停机</b></label></div>
           <div><input id="autoFlee" type="checkbox"><label for="autoFlee"><b>自动逃跑</b></label> <div class="customize" name="fleeCondition"></div></div>
           <div><input id="autoPause" type="checkbox"><label for="autoPause"><b>自动暂停</b></label> <div class="customize" name="pauseCondition"></div></div>
           <div><input id="autoshard" type="checkbox"><label for="autoshard"><b>自动附魔</b></label><input class="dbInputWide" name="autoshardlist" type="text"></div>
@@ -6377,7 +6494,7 @@ const AAD = {
           <div><input id="autobuy" type="checkbox"><label for="autobuy"><b>自动补充</b></label><input class="dbInputWide" name="autobuylist" type="text"></div>
           <div><input id="regifts" type="checkbox"><label for="regifts"><b>自动收礼</b></label></div>
           <div><input id="restoreStamina" type="checkbox"><label for="restoreStamina"><b>战前回复</b>: </label>
-            <span class="dbTipText">自动AR入场前,体力<<input class="dbNumber" name="staminaLow" placeholder="15" type="text"></label></span><br>
+            <span class="dbTipText">自动AR入场前,体力<<input class="dbNumber" name="staminaLow" placeholder="21" type="text"></label></span><br>
             <span class="dbTipText">不勾选时，小于设定值则不进行自动AR</span></div>
         `;
       },
@@ -6386,23 +6503,23 @@ const AAD = {
       buildItemTab() {
         return `
           <div class="itemOrder"><span class="dbTipText">施放顺序</span> <input class="dbInputWide" name="itemOrder" type="text" disabled><br>
-            <input id="itemOrder_Cure" type="checkbox"><label for="itemOrder_Cure">Cure</label><input id="itemOrder_FC" type="checkbox"><label for="itemOrder_FC">Full-Cure</label><input id="itemOrder_HP" type="checkbox"><label for="itemOrder_HP">Health Potion</label><input id="itemOrder_HE" type="checkbox"><label for="itemOrder_HE">Health Elixir</label><input id="itemOrder_MP" type="checkbox"><label for="itemOrder_MP">Mana Potion</label><input id="itemOrder_ME" type="checkbox"><label for="itemOrder_ME">Mana Elixir</label><br>
-            <input id="itemOrder_SP" type="checkbox"><label for="itemOrder_SP">Spirit Potion</label><input id="itemOrder_SE" type="checkbox"><label for="itemOrder_SE">Spirit Elixir</label><input id="itemOrder_LE" type="checkbox"><label for="itemOrder_LE">Last Elixir</label><input id="itemOrder_ED" type="checkbox"><label for="itemOrder_ED">Energy Drink</label></div>
-          <div><input id="item_Cure" type="checkbox"><label for="item_Cure"><b>Cure</b></label> <div class="customize" name="itemCureCondition"></div></div>
-          <div><input id="item_FC" type="checkbox"><label for="item_FC"><b>Full-Cure</b></label> <div class="customize" name="itemFCCondition"></div></div>
-          <div><input id="item_HP" type="checkbox"><label for="item_HP"><b>Health Potion</b></label> <div class="customize" name="itemHPCondition"></div></div>
-          <div><input id="item_HE" type="checkbox"><label for="item_HE"><b>Health Elixir</b></label> <div class="customize" name="itemHECondition"></div></div>
-          <div><input id="item_MP" type="checkbox"><label for="item_MP"><b>Mana Potion</b></label> <div class="customize" name="itemMPCondition"></div></div>
-          <div><input id="item_ME" type="checkbox"><label for="item_ME"><b>Mana Elixir</b></label> <div class="customize" name="itemMECondition"></div></div>
-          <div><input id="item_SP" type="checkbox"><label for="item_SP"><b>Spirit Potion</b></label> <div class="customize" name="itemSPCondition"></div></div>
-          <div><input id="item_SE" type="checkbox"><label for="item_SE"><b>Spirit Elixir</b></label> <div class="customize" name="itemSECondition"></div></div>
-          <div><input id="item_LE" type="checkbox"><label for="item_LE"><b>Last Elixir</b></label> <div class="customize" name="itemLECondition"></div></div>
-          <div><input id="item_ED" type="checkbox"><label for="item_ED"><b>Energy Drink</b></label> <div class="customize" name="itemEDCondition"></div></div>
+            <input id="itemOrder_Cure" type="checkbox"><label for="itemOrder_Cure">治疗</label><input id="itemOrder_FC" type="checkbox"><label for="itemOrder_FC">完全治疗</label><input id="itemOrder_HP" type="checkbox"><label for="itemOrder_HP">生命药水</label><input id="itemOrder_HE" type="checkbox"><label for="itemOrder_HE">生命秘药</label><input id="itemOrder_MP" type="checkbox"><label for="itemOrder_MP">法力药水</label><input id="itemOrder_ME" type="checkbox"><label for="itemOrder_ME">法力秘药</label><br>
+            <input id="itemOrder_SP" type="checkbox"><label for="itemOrder_SP">灵力药水</label><input id="itemOrder_SE" type="checkbox"><label for="itemOrder_SE">灵力秘药</label><input id="itemOrder_LE" type="checkbox"><label for="itemOrder_LE">终极秘药</label><input id="itemOrder_ED" type="checkbox"><label for="itemOrder_ED">能量饮料</label></div>
+          <div><input id="item_Cure" type="checkbox"><label for="item_Cure"><b>治疗</b></label> <div class="customize" name="itemCureCondition"></div></div>
+          <div><input id="item_FC" type="checkbox"><label for="item_FC"><b>完全治疗</b></label> <div class="customize" name="itemFCCondition"></div></div>
+          <div><input id="item_HP" type="checkbox"><label for="item_HP"><b>生命药水</b></label> <div class="customize" name="itemHPCondition"></div></div>
+          <div><input id="item_HE" type="checkbox"><label for="item_HE"><b>生命秘药</b></label> <div class="customize" name="itemHECondition"></div></div>
+          <div><input id="item_MP" type="checkbox"><label for="item_MP"><b>法力药水</b></label> <div class="customize" name="itemMPCondition"></div></div>
+          <div><input id="item_ME" type="checkbox"><label for="item_ME"><b>法力秘药</b></label> <div class="customize" name="itemMECondition"></div></div>
+          <div><input id="item_SP" type="checkbox"><label for="item_SP"><b>灵力药水</b></label> <div class="customize" name="itemSPCondition"></div></div>
+          <div><input id="item_SE" type="checkbox"><label for="item_SE"><b>灵力秘药</b></label> <div class="customize" name="itemSECondition"></div></div>
+          <div><input id="item_LE" type="checkbox"><label for="item_LE"><b>终极秘药</b></label> <div class="customize" name="itemLECondition"></div></div>
+          <div><input id="item_ED" type="checkbox"><label for="item_ED"><b>能量饮料</b></label> <div class="customize" name="itemEDCondition"></div></div>
           <div><input id="item_Infusion" type="checkbox"><label for="item_Infusion"><b>魔药</b></label> <div class="customize" name="itemInfusionCondition"></div><br><span class="dbTipText">魔药属性与<span>战斗核心</span>里的攻击模式相同</span></div>
-          <div><input id="item_HealthGem" type="checkbox"><label for="item_HealthGem"><b>Health Gem</b></label> <div class="customize" name="itemHealthGemCondition"></div></div>
-          <div><input id="item_ManaGem" type="checkbox"><label for="item_ManaGem"><b>Mana Gem</b></label> <div class="customize" name="itemManaGemCondition"></div></div>
-          <div><input id="item_SpiritGem" type="checkbox"><label for="item_SpiritGem"><b>Spirit Gem</b></label> <div class="customize" name="itemSpiritGemCondition"></div></div>
-          <div><input id="item_MysticGem" type="checkbox"><label for="item_MysticGem"><b>Mystic Gem</b></label> <div class="customize" name="itemMysticGemCondition"></div></div>
+          <div><input id="item_HealthGem" type="checkbox"><label for="item_HealthGem"><b>生命宝石</b></label> <div class="customize" name="itemHealthGemCondition"></div></div>
+          <div><input id="item_ManaGem" type="checkbox"><label for="item_ManaGem"><b>法力宝石</b></label> <div class="customize" name="itemManaGemCondition"></div></div>
+          <div><input id="item_SpiritGem" type="checkbox"><label for="item_SpiritGem"><b>灵力宝石</b></label> <div class="customize" name="itemSpiritGemCondition"></div></div>
+          <div><input id="item_MysticGem" type="checkbox"><label for="item_MysticGem"><b>神秘宝石</b></label> <div class="customize" name="itemMysticGemCondition"></div></div>
         `;
       },
 
@@ -6411,17 +6528,17 @@ const AAD = {
         return `
           <div class="channelSkillOrder"><span class="dbTipText">施放顺序</span>
             <input class="dbInputWide" name="channelSkillOrder" type="text" disabled><br>
-            <input id="channelSkillOrder_Pr" type="checkbox"><label for="channelSkillOrder_Pr">Protection</label><input id="channelSkillOrder_SL" type="checkbox"><label for="channelSkillOrder_SL">Spark of Life</label><input id="channelSkillOrder_SS" type="checkbox"><label for="channelSkillOrder_SS">Spirit Shield</label><input id="channelSkillOrder_Ha" type="checkbox"><label for="channelSkillOrder_Ha">Haste</label><input id="channelSkillOrder_AF" type="checkbox"><label for="channelSkillOrder_AF">Arcane Focus</label><input id="channelSkillOrder_He" type="checkbox"><label for="channelSkillOrder_He">Heartseeker</label><br>
-            <input id="channelSkillOrder_Re" type="checkbox"><label for="channelSkillOrder_Re">Regen</label><input id="channelSkillOrder_SV" type="checkbox"><label for="channelSkillOrder_SV">Shadow Veil</label><input id="channelSkillOrder_Ab" type="checkbox"><label for="channelSkillOrder_Ab">Absorb</label></div>
-          <div><input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><b>Protection</b></label> <div class="customize" name="channelSkillPrCondition"></div></div>
-          <div><input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><b>Spark of Life</b></label> <div class="customize" name="channelSkillSLCondition"></div></div>
-          <div><input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><b>Spirit Shield</b></label> <div class="customize" name="channelSkillSSCondition"></div></div>
-          <div><input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><b>Haste</b></label> <div class="customize" name="channelSkillHaCondition"></div></div>
-          <div><input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><b>Arcane Focus</b></label> <div class="customize" name="channelSkillAFCondition"></div></div>
-          <div><input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><b>Heartseeker</b></label> <div class="customize" name="channelSkillHeCondition"></div></div>
-          <div><input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><b>Regen</b></label> <div class="customize" name="channelSkillReCondition"></div></div>
-          <div><input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><b>Shadow Veil</b></label> <div class="customize" name="channelSkillSVCondition"></div></div>
-          <div><input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><b>Absorb</b></label> <div class="customize" name="channelSkillAbCondition"></div></div>
+            <input id="channelSkillOrder_Pr" type="checkbox"><label for="channelSkillOrder_Pr">守护</label><input id="channelSkillOrder_SL" type="checkbox"><label for="channelSkillOrder_SL">生命火花</label><input id="channelSkillOrder_SS" type="checkbox"><label for="channelSkillOrder_SS">灵力盾</label><input id="channelSkillOrder_Ha" type="checkbox"><label for="channelSkillOrder_Ha">加速</label><input id="channelSkillOrder_AF" type="checkbox"><label for="channelSkillOrder_AF">奥术专注</label><input id="channelSkillOrder_He" type="checkbox"><label for="channelSkillOrder_He">觅心者</label><br>
+            <input id="channelSkillOrder_Re" type="checkbox"><label for="channelSkillOrder_Re">细胞活化</label><input id="channelSkillOrder_SV" type="checkbox"><label for="channelSkillOrder_SV">影纱</label><input id="channelSkillOrder_Ab" type="checkbox"><label for="channelSkillOrder_Ab">吸收</label></div>
+          <div><input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><b>守护</b></label> <div class="customize" name="channelSkillPrCondition"></div></div>
+          <div><input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><b>生命火花</b></label> <div class="customize" name="channelSkillSLCondition"></div></div>
+          <div><input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><b>灵力盾</b></label> <div class="customize" name="channelSkillSSCondition"></div></div>
+          <div><input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><b>加速</b></label> <div class="customize" name="channelSkillHaCondition"></div></div>
+          <div><input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><b>奥术专注</b></label> <div class="customize" name="channelSkillAFCondition"></div></div>
+          <div><input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><b>觅心者</b></label> <div class="customize" name="channelSkillHeCondition"></div></div>
+          <div><input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><b>细胞活化</b></label> <div class="customize" name="channelSkillReCondition"></div></div>
+          <div><input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><b>影纱</b></label> <div class="customize" name="channelSkillSVCondition"></div></div>
+          <div><input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><b>吸收</b></label> <div class="customize" name="channelSkillAbCondition"></div></div>
         `;
       },
 
@@ -6429,23 +6546,23 @@ const AAD = {
       buildBuffTab() {
         return `<div class="buffSkillOrder"><span class="dbTipText">施放顺序</span>
             <input class="dbInputWide" name="buffSkillOrder" type="text" disabled><br>
-            <input id="buffSkillOrder_Pr" type="checkbox"><label for="buffSkillOrder_Pr">Protection</label><input id="buffSkillOrder_SL" type="checkbox"><label for="buffSkillOrder_SL">Spark of Life</label><input id="buffSkillOrder_SS" type="checkbox"><label for="buffSkillOrder_SS">Spirit Shield</label><input id="buffSkillOrder_Ha" type="checkbox"><label for="buffSkillOrder_Ha">Haste</label><input id="buffSkillOrder_AF" type="checkbox"><label for="buffSkillOrder_AF">Arcane Focus</label><input id="buffSkillOrder_He" type="checkbox"><label for="buffSkillOrder_He">Heartseeker</label><br>
-            <input id="buffSkillOrder_Re" type="checkbox"><label for="buffSkillOrder_Re">Regen</label><input id="buffSkillOrder_SV" type="checkbox"><label for="buffSkillOrder_SV">Shadow Veil</label><input id="buffSkillOrder_Ab" type="checkbox"><label for="buffSkillOrder_Ab">Absorb</label></div>
+            <input id="buffSkillOrder_Pr" type="checkbox"><label for="buffSkillOrder_Pr">守护</label><input id="buffSkillOrder_SL" type="checkbox"><label for="buffSkillOrder_SL">生命火花</label><input id="buffSkillOrder_SS" type="checkbox"><label for="buffSkillOrder_SS">灵力盾</label><input id="buffSkillOrder_Ha" type="checkbox"><label for="buffSkillOrder_Ha">加速</label><input id="buffSkillOrder_AF" type="checkbox"><label for="buffSkillOrder_AF">奥术专注</label><input id="buffSkillOrder_He" type="checkbox"><label for="buffSkillOrder_He">觅心者</label><br>
+            <input id="buffSkillOrder_Re" type="checkbox"><label for="buffSkillOrder_Re">细胞活化</label><input id="buffSkillOrder_SV" type="checkbox"><label for="buffSkillOrder_SV">影纱</label><input id="buffSkillOrder_Ab" type="checkbox"><label for="buffSkillOrder_Ab">吸收</label></div>
           <div class="buffSkillCondition"><div class="customize" name="buffSkillCondition"></div></div>
-          <div><input id="buffSkill_HD" type="checkbox"><label for="buffSkill_HD"><b>Health Draught</b></label> <div class="customize" name="buffSkillHDCondition"></div></div>
-          <div><input id="buffSkill_MD" type="checkbox"><label for="buffSkill_MD"><b>Mana Draught</b></label> <div class="customize" name="buffSkillMDCondition"></div></div>
-          <div><input id="buffSkill_SD" type="checkbox"><label for="buffSkill_SD"><b>Spirit Draught</b></label> <div class="customize" name="buffSkillSDCondition"></div></div>
-          <div><input id="buffSkill_FV" type="checkbox"><label for="buffSkill_FV"><b>Flower Vase</b></label> <div class="customize" name="buffSkillFVCondition"></div></div>
-          <div><input id="buffSkill_BG" type="checkbox"><label for="buffSkill_BG"><b>Bubble-Gum</b></label> <div class="customize" name="buffSkillBGCondition"></div></div>
-          <div><input id="buffSkill_Pr" type="checkbox"><label for="buffSkill_Pr"><b>Protection</b></label> <div class="customize" name="buffSkillPrCondition"></div></div>
-          <div><input id="buffSkill_SL" type="checkbox"><label for="buffSkill_SL"><b>Spark of Life</b></label> <div class="customize" name="buffSkillSLCondition"></div></div>
-          <div><input id="buffSkill_SS" type="checkbox"><label for="buffSkill_SS"><b>Spirit Shield</b></label> <div class="customize" name="buffSkillSSCondition"></div></div>
-          <div><input id="buffSkill_Ha" type="checkbox"><label for="buffSkill_Ha"><b>Haste</b></label> <div class="customize" name="buffSkillHaCondition"></div></div>
-          <div><input id="buffSkill_AF" type="checkbox"><label for="buffSkill_AF"><b>Arcane Focus</b></label> <div class="customize" name="buffSkillAFCondition"></div></div>
-          <div><input id="buffSkill_He" type="checkbox"><label for="buffSkill_He"><b>Heartseeker</b></label> <div class="customize" name="buffSkillHeCondition"></div></div>
-          <div><input id="buffSkill_Re" type="checkbox"><label for="buffSkill_Re"><b>Regen</b></label> <div class="customize" name="buffSkillReCondition"></div></div>
-          <div><input id="buffSkill_SV" type="checkbox"><label for="buffSkill_SV"><b>Shadow Veil</b></label> <div class="customize" name="buffSkillSVCondition"></div></div>
-          <div><input id="buffSkill_Ab" type="checkbox"><label for="buffSkill_Ab"><b>Absorb</b></label> <div class="customize" name="buffSkillAbCondition"></div></div>
+          <div><input id="buffSkill_HD" type="checkbox"><label for="buffSkill_HD"><b>生命长效药</b></label> <div class="customize" name="buffSkillHDCondition"></div></div>
+          <div><input id="buffSkill_MD" type="checkbox"><label for="buffSkill_MD"><b>法力长效药</b></label> <div class="customize" name="buffSkillMDCondition"></div></div>
+          <div><input id="buffSkill_SD" type="checkbox"><label for="buffSkill_SD"><b>灵力长效药</b></label> <div class="customize" name="buffSkillSDCondition"></div></div>
+          <div><input id="buffSkill_FV" type="checkbox"><label for="buffSkill_FV"><b>花瓶</b></label> <div class="customize" name="buffSkillFVCondition"></div></div>
+          <div><input id="buffSkill_BG" type="checkbox"><label for="buffSkill_BG"><b>泡泡糖</b></label> <div class="customize" name="buffSkillBGCondition"></div></div>
+          <div><input id="buffSkill_Pr" type="checkbox"><label for="buffSkill_Pr"><b>守护</b></label> <div class="customize" name="buffSkillPrCondition"></div></div>
+          <div><input id="buffSkill_SL" type="checkbox"><label for="buffSkill_SL"><b>生命火花</b></label> <div class="customize" name="buffSkillSLCondition"></div></div>
+          <div><input id="buffSkill_SS" type="checkbox"><label for="buffSkill_SS"><b>灵力盾</b></label> <div class="customize" name="buffSkillSSCondition"></div></div>
+          <div><input id="buffSkill_Ha" type="checkbox"><label for="buffSkill_Ha"><b>加速</b></label> <div class="customize" name="buffSkillHaCondition"></div></div>
+          <div><input id="buffSkill_AF" type="checkbox"><label for="buffSkill_AF"><b>奥术专注</b></label> <div class="customize" name="buffSkillAFCondition"></div></div>
+          <div><input id="buffSkill_He" type="checkbox"><label for="buffSkill_He"><b>觅心者</b></label> <div class="customize" name="buffSkillHeCondition"></div></div>
+          <div><input id="buffSkill_Re" type="checkbox"><label for="buffSkill_Re"><b>细胞活化</b></label> <div class="customize" name="buffSkillReCondition"></div></div>
+          <div><input id="buffSkill_SV" type="checkbox"><label for="buffSkill_SV"><b>影纱</b></label> <div class="customize" name="buffSkillSVCondition"></div></div>
+          <div><input id="buffSkill_Ab" type="checkbox"><label for="buffSkill_Ab"><b>吸收</b></label> <div class="customize" name="buffSkillAbCondition"></div></div>
         `;
       },
 
@@ -6454,27 +6571,27 @@ const AAD = {
         return `
           <div class="debuffSkillOrder"><span class="dbTipText">施放顺序</span>
             <input class="dbInputWide" name="debuffSkillOrder" type="text" disabled><br>
-            <input id="debuffSkillOrder_Sle" type="checkbox"><label for="debuffSkillOrder_Sle">Sleep</label><input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im">Imperil</label><input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si">Silence</label><input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We">Weaken</label><input id="debuffSkillOrder_Bl" type="checkbox"><label for="debuffSkillOrder_Bl">Blind</label><input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo">Slow</label>
-            <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN">MagNet</label><input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr">Drain</label><input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co">Confuse</label></div>
+            <input id="debuffSkillOrder_Sle" type="checkbox"><label for="debuffSkillOrder_Sle">睡眠</label><input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im">陷危</label><input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si">沉默</label><input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We">虚弱</label><input id="debuffSkillOrder_Bl" type="checkbox"><label for="debuffSkillOrder_Bl">致盲</label><input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo">减速</label>
+            <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN">定身</label><input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr">枯竭</label><input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co">混乱</label></div>
           <div class="debuffSkillCondition"><div class="customize" name="debuffSkillCondition"></div></div>
-          <div><input id="debuffSkillAllSleep" type="checkbox"><label for="debuffSkillAllSleep"><b>Sleep all</b></label>
+          <div><input id="debuffSkillAllSleep" type="checkbox"><label for="debuffSkillAllSleep"><b>全体睡眠</b></label>
             <input class="dbNumber" name="sleepRatio" type="text" placeholder="0">
             <div class="customize" name="debuffSkillallsleepCondition"></div></div>
-          <div><input id="debuffSkillAllMN" type="checkbox"><label for="debuffSkillAllMN"><b>MagNet all</b></label><input class="dbNumber" name="magnetRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallmagnetCondition"></div></div>
-          <div><input id="debuffSkillAllWeak" type="checkbox"><label for="debuffSkillAllWeak"><b>Weaken all</b></label>
+          <div><input id="debuffSkillAllMN" type="checkbox"><label for="debuffSkillAllMN"><b>全体定身</b></label><input class="dbNumber" name="magnetRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallmagnetCondition"></div></div>
+          <div><input id="debuffSkillAllWeak" type="checkbox"><label for="debuffSkillAllWeak"><b>全体虚弱</b></label>
             <input class="dbNumber" name="weakRatio" type="text" placeholder="0">
             <div class="customize" name="debuffSkillallweakCondition"></div></div>
-          <div><input id="debuffSkillAllSi" type="checkbox"><label for="debuffSkillAllSi"><b>Silence all</b></label><input class="dbNumber" name="silenceRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallsilenceCondition"></div></div>
-          <div><input id="debuffSkillAllIm" type="checkbox"><label for="debuffSkillAllIm"><b>Imperil all</b></label><input class="dbNumber" name="impRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallimpCondition"></div></div>
-          <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><b>Sleep</b></label> <div class="customize" name="debuffSkillSleCondition"></div></div>
-          <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><b>Blind</b></label> <div class="customize" name="debuffSkillBlCondition"></div></div>
-          <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><b>Slow</b></label> <div class="customize" name="debuffSkillSloCondition"></div></div>
-          <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><b>Imperil</b></label> <div class="customize" name="debuffSkillImCondition"></div></div>
-          <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><b>MagNet</b></label> <div class="customize" name="debuffSkillMNCondition"></div></div>
-          <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><b>Silence</b></label> <div class="customize" name="debuffSkillSiCondition"></div></div>
-          <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><b>Drain</b></label> <div class="customize" name="debuffSkillDrCondition"></div></div>
-          <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><b>Weaken</b></label> <div class="customize" name="debuffSkillWeCondition"></div></div>
-          <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><b>Confuse</b></label> <div class="customize" name="debuffSkillCoCondition"></div></div>
+          <div><input id="debuffSkillAllSi" type="checkbox"><label for="debuffSkillAllSi"><b>全体沉默</b></label><input class="dbNumber" name="silenceRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallsilenceCondition"></div></div>
+          <div><input id="debuffSkillAllIm" type="checkbox"><label for="debuffSkillAllIm"><b>全体陷危</b></label><input class="dbNumber" name="impRatio" type="text" placeholder="0"> <div class="customize" name="debuffSkillallimpCondition"></div></div>
+          <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><b>睡眠</b></label> <div class="customize" name="debuffSkillSleCondition"></div></div>
+          <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><b>致盲</b></label> <div class="customize" name="debuffSkillBlCondition"></div></div>
+          <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><b>减速</b></label> <div class="customize" name="debuffSkillSloCondition"></div></div>
+          <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><b>陷危</b></label> <div class="customize" name="debuffSkillImCondition"></div></div>
+          <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><b>定身</b></label> <div class="customize" name="debuffSkillMNCondition"></div></div>
+          <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><b>沉默</b></label> <div class="customize" name="debuffSkillSiCondition"></div></div>
+          <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><b>枯竭</b></label> <div class="customize" name="debuffSkillDrCondition"></div></div>
+          <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><b>虚弱</b></label> <div class="customize" name="debuffSkillWeCondition"></div></div>
+          <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><b>混乱</b></label> <div class="customize" name="debuffSkillCoCondition"></div></div>
         `;
       },
 
@@ -6501,13 +6618,13 @@ const AAD = {
         return `
           <div><div class="customize" name="scrollCondition"></div></div>
           <input id="scrollFirst" type="checkbox"><label for="scrollFirst">存在技能生成的Buff时，仍然使用卷轴.</label>
-          <div><input id="scroll_Go" type="checkbox"><label for="scroll_Go"><b>Scroll of the Gods</b></label><div class="customize" name="scrollGoCondition"></div></div>
-          <div><input id="scroll_Av" type="checkbox"><label for="scroll_Av"><b>Scroll of the Avatar</b></label><div class="customize" name="scrollAvCondition"></div></div>
-          <div><input id="scroll_Pr" type="checkbox"><label for="scroll_Pr"><b>Scroll of Protection</b></label><div class="customize" name="scrollPrCondition"></div></div>
-          <div><input id="scroll_Sw" type="checkbox"><label for="scroll_Sw"><b>Scroll of Swiftness</b></label><div class="customize" name="scrollSwCondition"></div></div>
-          <div><input id="scroll_Li" type="checkbox"><label for="scroll_Li"><b>Scroll of Life</b></label><div class="customize" name="scrollLiCondition"></div></div>
-          <div><input id="scroll_Sh" type="checkbox"><label for="scroll_Sh"><b>Scroll of Shadows</b></label><div class="customize" name="scrollShCondition"></div></div>
-          <div><input id="scroll_Ab" type="checkbox"><label for="scroll_Ab"><b>Scroll of Absorption</b></label><div class="customize" name="scrollAbCondition"></div></div>
+          <div><input id="scroll_Go" type="checkbox"><label for="scroll_Go"><b>神之卷轴</b></label><div class="customize" name="scrollGoCondition"></div></div>
+          <div><input id="scroll_Av" type="checkbox"><label for="scroll_Av"><b>化身卷轴</b></label><div class="customize" name="scrollAvCondition"></div></div>
+          <div><input id="scroll_Pr" type="checkbox"><label for="scroll_Pr"><b>保护卷轴</b></label><div class="customize" name="scrollPrCondition"></div></div>
+          <div><input id="scroll_Sw" type="checkbox"><label for="scroll_Sw"><b>加速卷轴</b></label><div class="customize" name="scrollSwCondition"></div></div>
+          <div><input id="scroll_Li" type="checkbox"><label for="scroll_Li"><b>生命卷轴</b></label><div class="customize" name="scrollLiCondition"></div></div>
+          <div><input id="scroll_Sh" type="checkbox"><label for="scroll_Sh"><b>幻影卷轴</b></label><div class="customize" name="scrollShCondition"></div></div>
+          <div><input id="scroll_Ab" type="checkbox"><label for="scroll_Ab"><b>吸收卷轴</b></label><div class="customize" name="scrollAbCondition"></div></div>
         `;
       },
 
@@ -6552,8 +6669,8 @@ const AAD = {
                     <div style="display:flex;flex-direction:column;gap:8px;">
                       <button class="dbShowBattleStatsModal">战斗数据统计</button>
                       <div style="display:flex;gap:8px;flex-wrap:nowrap;">
-                        <button class="updateData_bid" style="flex:1 1 0;white-space:nowrap;">BID更新</button>
-                        <button class="updateData_ask" style="flex:1 1 0;white-space:nowrap;">ASK更新</button>
+                        <button class="updateData_bid" style="flex:1 1 0;white-space:nowrap;">买价更新</button>
+                        <button class="updateData_ask" style="flex:1 1 0;white-space:nowrap;">卖价更新</button>
                         <button class="showPrices" style="flex:1 1 0;white-space:nowrap;">查看价格</button>
                       </div>
                     </div>
@@ -7188,12 +7305,11 @@ const AAD = {
 
       addAutoIWTask(panel) {
         const urlParams = new URLSearchParams(window.location.search);
-        const isIwPage = AAD.Runtime.isIsekai() &&
-                         urlParams.get('s') === 'Battle' &&
+        const isIwPage = urlParams.get('s') === 'Battle' &&
                          urlParams.get('ss') === 'iw' &&
                          urlParams.get('screen') === 'itemworld';
         if (!isIwPage) {
-          alert('请在异世界 Item World 页面添加任务');
+          alert('请在 Item World 子页面添加任务');
           return;
         }
 
@@ -7600,12 +7716,18 @@ const AAD = {
           }
           // 继续时调用misspony和main
           AAD.Logic.PageHandler.misspony();
+          if (AAD.Logic.Battle && typeof AAD.Logic.Battle.startLogWatchdog === 'function') {
+            AAD.Logic.Battle.startLogWatchdog();
+          }
           if (typeof AAD.Logic.Battle.main === 'function') AAD.Logic.Battle.main();
         } else {
           // 暂停
           AAD.Core.Storage.setValue('disabled', true);
           AAD.Core.Storage.setValue('missanswer', false);
           AAD.Core.State.set('end', true);
+          if (AAD.Logic.Battle && typeof AAD.Logic.Battle.stopLogWatchdog === 'function') {
+            AAD.Logic.Battle.stopLogWatchdog();
+          }
           const pauseButton = AAD.Utils.DOM.gE('#dbBox2>button');
           if (pauseButton) {
             pauseButton.innerHTML = '继续';
@@ -7932,6 +8054,10 @@ const AAD = {
         bodyHTML += '<tr class="AADBDataRow">';
         Object.keys(columns).forEach(groupName => {
           columns[groupName].forEach(column => {
+            if (column.field === 'delete_action') {
+              bodyHTML += '<td class="AADBDataCell"></td>';
+              return;
+            }
             const value = averageRow[column.field] || '';
             const cellClass = 'AADBDataCell';
             bodyHTML += this.generateTableCellWithTooltip(value, cellClass, column, averageRow, 'average');
@@ -7943,6 +8069,10 @@ const AAD = {
         bodyHTML += '<tr class="AADBDataRow">';
         Object.keys(columns).forEach(groupName => {
           columns[groupName].forEach(column => {
+            if (column.field === 'delete_action') {
+              bodyHTML += '<td class="AADBDataCell"></td>';
+              return;
+            }
             const value = totalRow[column.field] || '';
             const cellClass = 'AADBDataCell';
             bodyHTML += this.generateTableCellWithTooltip(value, cellClass, column, totalRow, 'total');
@@ -7963,6 +8093,10 @@ const AAD = {
 
           Object.keys(columns).forEach(groupName => {
             columns[groupName].forEach(column => {
+              if (column.field === 'delete_action') {
+                bodyHTML += this.generateDeleteActionCell(row, 'AADBDataCell');
+                return;
+              }
               let value = row[column.field];
               let cellClass = 'AADBDataCell';
 
@@ -8016,6 +8150,29 @@ const AAD = {
         return `<td class="${finalClass}"${tooltipAttr}>${displayValue}</td>`;
       },
 
+      generateDeleteActionCell(row, cellClass = 'AADBDataCell') {
+        if (!row || !row.id) {
+          return `<td class="${cellClass}"></td>`;
+        }
+        return `<td class="${cellClass} AADBDeleteCell" data-delete-record-id="${row.id}"><span class="dbDefeatLogHint">删除</span></td>`;
+      },
+
+      async handleDeleteRecord(recordId) {
+        if (this.deletingRecord) return;
+
+        this.deletingRecord = true;
+        try {
+          await AAD.Core.Database.deleteBattleById(recordId);
+          const modal = AAD.Utils.DOM.gE('#AADBBattleStatsModal');
+          const container = modal ? modal.querySelector('.AADBContainer') : null;
+          if (container) {
+            await this.applyBattleStatsFilter(container);
+          }
+        } finally {
+          this.deletingRecord = false;
+        }
+      },
+
       // 初始化tooltip懒加载
       initTooltipLazyLoading() {
         // 简化的tooltip初始化 - 可以后续完善
@@ -8062,6 +8219,15 @@ const AAD = {
         });
 
         table.addEventListener('click', (e) => {
+          const deleteCell = e.target.closest('td[data-delete-record-id]');
+          if (deleteCell) {
+            const recordId = deleteCell.getAttribute('data-delete-record-id');
+            if (recordId) {
+              this.handleDeleteRecord(recordId);
+            }
+            return;
+          }
+
           const cell = e.target.closest('td[data-tooltip-type="defeat_log"]');
           if (!cell) return;
           const rowId = cell.getAttribute('data-row-id');
@@ -9054,6 +9220,10 @@ const AAD = {
             background-color: var(--aad-main-bg);
             cursor: pointer;
             color: var(--aad-text-primary);
+          }
+
+          .AADBDeleteCell {
+            cursor: pointer;
           }
 
           .AADBTableWrapper {

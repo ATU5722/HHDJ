@@ -120,9 +120,7 @@ function say
 
 function determine_system_variables
 {
-	CurrentUser="$(id -u -n)"
 	CurrentDir=$(pwd)
-	HomeDir=$HOME
 }
 
 function get_user_options
@@ -430,8 +428,9 @@ exec /bin/sh /etc/X11/Xsession
 
 END
 	chmod +x /etc/xrdp/startwm.sh
+t	systemctl enable xrdp
 	systemctl restart xrdp
-	sleep 5
+	sleep 10
 	echo "Waiting to start XRDP server..."
 	ss -lnpt | grep xrdp > /dev/null
 	if [ $? = 0 ] ; then
@@ -610,7 +609,7 @@ function install_chromium
 CHROME_CRASHPAD_ENABLED=0 /opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --disable-crashpad-for-testing --js-flags="--max-old-space-size=64" --user-data-dir=/home/atu/.config/chromium-user-data &
 echo 1000 > /proc/$!/oom_score_adj
 EOF
-	chown atu:atu /home/atu/Desktop/StartChromium.sh /home/atu/.config/chromium-user-data
+	chown -R atu:atu /home/atu/Desktop /home/atu/.config/chromium-user-data
 	chmod +x /home/atu/Desktop/StartChromium.sh
 
 	say @B"Chromium (portable build, revision $REVISION) installed." green
@@ -640,7 +639,6 @@ END
 	fi
 
 	rm -f /var/log/nginx/guac_access.log* 2>/dev/null || true
-	systemctl reload nginx 2>/dev/null || true
 
 	# --- Remove snapd (Ubuntu only) ---
 	if [ "$OS" = "UBUNTU24" ] ; then

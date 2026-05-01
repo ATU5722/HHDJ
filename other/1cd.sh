@@ -372,11 +372,11 @@ END
 function install_rdp
 {
 	echo 
-	echo "Starting to install window manager and XRDP server..."
+	echo "Starting to install desktop and XRDP server..."
 	if [ "$OS" = "UBUNTU24" ] ; then
 		say @B"Disabling unnecessary LightDM display manager..." yellow
 	fi
-	apt-get install openbox xterm xrdp -y
+	apt-get install xfce4 xrdp -y
 	mkdir -p /etc/systemd/system/xrdp.service.d
 	cat > /etc/systemd/system/xrdp.service.d/oom.conf <<END
 [Service]
@@ -386,8 +386,9 @@ END
 	if [ "$OS" = "UBUNTU24" ] ; then
 		systemctl disable lightdm 2>/dev/null || true
 		systemctl stop lightdm 2>/dev/null || true
+t		apt purge gnome-session-bin gnome-session-common gnome-initial-setup evolution-data-server -y 2>/dev/null || true
 	fi
-	say @B"Openbox and XRDP server successfully installed." green
+	say @B"XFCE4 desktop and XRDP server successfully installed." green
 	echo "Starting to configure XRDP server..."
 	sleep 2
 	echo 
@@ -422,7 +423,7 @@ if test -r /etc/default/locale; then
 fi
 
 
- openbox-session
+ xfce4-session
 
 test -x /etc/X11/Xsession && exec /etc/X11/Xsession
 exec /bin/sh /etc/X11/Xsession
@@ -436,9 +437,9 @@ END
 	if [ $? = 0 ] ; then
 		ss -lnpt | grep guacd > /dev/null
 		if [ $? = 0 ] ; then
-			say @B"XRDP and Openbox successfully configured!" green
+			say @B"XRDP and XFCE4 desktop successfully configured!" green
 		else 
-			say @B"XRDP and Openbox successfully configured!" green
+			say @B"XRDP and XFCE4 desktop successfully configured!" green
 			sleep 3
 			systemctl start guacd
 		fi
@@ -546,6 +547,15 @@ END
 
 	say @B"Linux user atu configured with sudo privileges." green
 	say @B"If atu is already logged in, re-login is required for sudo group refresh." yellow
+
+	# Disable unnecessary XFCE4 autostart services
+	AUTOSTART_DIR="/home/atu/.config/autostart"
+	mkdir -p "$AUTOSTART_DIR"
+	for svc in xfce4-power-manager xfce4-screensaver xfce4-notifyd tumblerd; do
+		cp "/etc/xdg/autostart/${svc}.desktop" "$AUTOSTART_DIR/" 2>/dev/null
+		echo "Hidden=true" >> "$AUTOSTART_DIR/${svc}.desktop" 2>/dev/null
+	done
+	chown -R atu:atu "$AUTOSTART_DIR"
 }
 
 function install_chromium
@@ -594,15 +604,14 @@ function install_chromium
 		return
 	fi
 
-	mkdir -p /home/atu/.config/openbox
-	mkdir -p /home/atu/.config/chromium-user-data
-	cat > /home/atu/.config/openbox/autostart <<'EOF'
+	mkdir -p /home/atu/Desktop /home/atu/.config/chromium-user-data
+	cat > /home/atu/Desktop/StartChromium.sh <<'EOF'
 #!/bin/bash
-/opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --no-first-run --disable-extensions --disable-sync --disable-translate --disable-default-apps --js-flags="--max-old-space-size=64" --user-data-dir=/home/atu/.config/chromium-user-data &
+CHROME_CRASHPAD_ENABLED=0 /opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --disable-crashpad-for-testing --js-flags="--max-old-space-size=64" --user-data-dir=/home/atu/.config/chromium-user-data &
 echo 1000 > /proc/$!/oom_score_adj
 EOF
-	chown -R atu:atu /home/atu/.config/openbox /home/atu/.config/chromium-user-data
-	chmod +x /home/atu/.config/openbox/autostart
+	chown atu:atu /home/atu/Desktop/StartChromium.sh /home/atu/.config/chromium-user-data
+	chmod +x /home/atu/Desktop/StartChromium.sh
 
 	say @B"Chromium (portable build, revision $REVISION) installed." green
 }
@@ -692,7 +701,7 @@ function main
 		install_chromium
 		install_reverse_proxy
 		echo 
-		say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type." yellow
+		say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type.  After logging in, double-click StartChromium.sh on the desktop to launch the browser." yellow
 		if [ -x /opt/chromium-latest/latest/chrome ]; then
 			chromium_version=$(/opt/chromium-latest/latest/chrome --version 2>/dev/null)
 			say @B"Installed browser version: ${chromium_version}" green

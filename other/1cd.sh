@@ -551,27 +551,57 @@ END
 function install_chromium
 {
 	echo
-	say @B"Installing Chromium browser..." yellow
+	say @B"Installing Chromium browser (portable build)..." yellow
 
-	if [ "$OS" = "UBUNTU24" ] ; then
-		apt-get install software-properties-common -y
-		add-apt-repository ppa:xtradeb/apps -y
-		apt-get update
-		apt-get install chromium -y
-	else
-		apt-get install chromium -y
+	# Runtime libraries required by Chromium
+	apt-get install -y libnss3 libnspr4 libgbm1 libasound2 libdrm2 \
+		libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libxfixes3 \
+		libxrender1 libcups2 libpango-1.0-0 libatk1.0-0 libatk-bridge2.0-0 \
+		libgtk-3-0 libxss1 2>/dev/null || true
+
+	CHROMIUM_DIR=/opt/chromium-latest
+	mkdir -p $CHROMIUM_DIR
+	cd $CHROMIUM_DIR
+
+	LASTCHANGE_URL="https://www.googleapis.com/download/storage/v1/b/chromium-browser-snapshots/o/Linux_x64%2FLAST_CHANGE?alt=media"
+	REVISION=$(curl -sS "$LASTCHANGE_URL")
+
+	if [ -z "$REVISION" ]; then
+		say "Failed to fetch latest Chromium revision." red
+		exit 1
+	fi
+
+	echo "Latest Chromium revision: $REVISION"
+
+	if [ ! -d "$REVISION/chrome-linux" ]; then
+		ZIP_URL="https://www.googleapis.com/download/storage/v1/b/chromium-browser-snapshots/o/Linux_x64%2F$REVISION%2Fchrome-linux.zip?alt=media"
+		mkdir -p $REVISION
+		cd $REVISION
+		curl -sS -L "$ZIP_URL" -o chrome-linux.zip
+		unzip -o chrome-linux.zip
+		rm -f chrome-linux.zip
+		cd ..
+	fi
+
+	rm -f latest
+	ln -sf $REVISION/chrome-linux ./latest
+
+	if [ ! -f ./latest/chrome ]; then
+		say "Chromium binary not found after extraction." red
+		exit 1
 	fi
 
 	mkdir -p /home/atu/.config/openbox
+	mkdir -p /home/atu/.config/chromium-user-data
 	cat > /home/atu/.config/openbox/autostart <<'EOF'
 #!/bin/bash
-chromium --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --no-first-run --single-process --enable-low-end-device-mode --js-flags="--max-old-space-size=64" --disk-cache-size=10485760 &
+/opt/chromium-latest/latest/chrome --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-background-networking --no-first-run --single-process --enable-low-end-device-mode --js-flags="--max-old-space-size=64" --disk-cache-size=10485760 --user-data-dir=/home/atu/.config/chromium-user-data &
 echo 1000 > /proc/$!/oom_score_adj
 EOF
-	chown -R atu:atu /home/atu/.config/openbox
+	chown -R atu:atu /home/atu/.config/openbox /home/atu/.config/chromium-user-data
 	chmod +x /home/atu/.config/openbox/autostart
 
-	say @B"Chromium installed and Openbox autostart configured." green
+	say @B"Chromium (portable build, revision $REVISION) installed." green
 }
 
 function optimize_system
@@ -660,11 +690,8 @@ function main
 		install_reverse_proxy
 		echo 
 		say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type." yellow
-		if command -v chromium >/dev/null 2>&1 ; then
-			chromium_version=$(chromium --version)
-			say @B"Installed browser version: ${chromium_version}" green
-		elif command -v chromium-browser >/dev/null 2>&1 ; then
-			chromium_version=$(chromium-browser --version)
+		if [ -x /opt/chromium-latest/latest/chrome ]; then
+			chromium_version=$(/opt/chromium-latest/latest/chrome --version 2>/dev/null)
 			say @B"Installed browser version: ${chromium_version}" green
 		else
 			say "Installed browser version: Chromium not found." red

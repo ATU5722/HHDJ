@@ -19,8 +19,8 @@ GUACAMOLE_DOWNLOAD_LINK="https://dlcdn.apache.org/guacamole/1.5.5/source/guacamo
 GUACAMOLE_VERSION="1.5.5"
 
 #By default, this script only works on Ubuntu 24 and Debian 12.
-#You can disable the OS check switch below and tweak the code yourself to try to install it in other OS versions.
-#Please do note that if you choose to use this script on OS other than Ubuntu 24 or Debian 12, you might mess up your OS.  Please keep a backup of your server before installation.
+#You can disable the OS check switch below to try to install it in other OS versions.
+#Please do note that if you choose to use this script on unsupported OS, you might mess up your system.
 
 OS_CHECK_ENABLED=ON
 
@@ -52,42 +52,22 @@ function check_OS
 		if [ $? = 0 ] ; then
 			OS=UBUNTU24
 		else
-			cat /etc/lsb-release | grep "DISTRIB_RELEASE=22." >/dev/null
-			if [ $? = 0 ] ; then
-				OS=UBUNTU22
-			else
-				cat /etc/lsb-release | grep "DISTRIB_RELEASE=20." >/dev/null
-				if [ $? = 0 ] ; then
-					OS=UBUNTU20
-				else
-					say "Sorry, this script only supports Ubuntu 24 and Debian 12." red
-					echo 
-					exit 1
-				fi
-			fi
+			say "Sorry, this script only supports Ubuntu 24 and Debian 12." red
+			echo
+			exit 1
 		fi
 	elif [ -f /etc/debian_version ] ; then
 		cat /etc/debian_version | grep "^12." >/dev/null
 		if [ $? = 0 ] ; then
 			OS=DEBIAN12
 		else
-			cat /etc/debian_version | grep "^11." >/dev/null
-			if [ $? = 0 ] ; then
-				OS=DEBIAN11
-			else
-				cat /etc/debian_version | grep "^10." >/dev/null
-				if [ $? = 0 ] ; then
-					OS=DEBIAN10
-				else
-					say "Sorry, this script only supports Ubuntu 24 and Debian 12." red
-					echo 
-					exit 1
-				fi
-			fi
+			say "Sorry, this script only supports Ubuntu 24 and Debian 12." red
+			echo
+			exit 1
 		fi
 	else
 		say "Sorry, this script only supports Ubuntu 24 and Debian 12." red
-		echo 
+		echo
 		exit 1
 	fi
 }
@@ -132,9 +112,7 @@ function say
 
 function determine_system_variables
 {
-	CurrentUser="$(id -u -n)"
 	CurrentDir=$(pwd)
-	HomeDir=$HOME
 }
 
 function get_user_options
@@ -147,9 +125,6 @@ function get_user_options
 	read guacamole_password_md5 <<< $(echo -n $guacamole_password_prehash | md5sum | awk '{print $1}')
 	say @B"Guacamole user: $guacamole_username" green
 
-	choice_rdpvnc=1
-
-	set_rdp_resolution=1
 	rdp_screen_width="$RDP_WIDTH"
 	rdp_screen_height="$RDP_HEIGHT"
 	say @B"RDP resolution: ${rdp_screen_width}x${rdp_screen_height}" green
@@ -173,33 +148,23 @@ function get_user_options
 	echo
 	say @B"Desktop environment installation will start now.  Please wait." green
 	sleep 3
-}	
+}
 
 function install_guacamole_ubuntu_debian
 {
-	echo 
+	echo
 	say @B"Setting up dependencies..." yellow
-	echo 
+	echo
 	apt-get update && apt-get upgrade -y
-	if [ "$OS" = "DEBIAN10" ] || [ "$OS" = "DEBIAN11" ] ; then
-		apt-get install libjpeg62-turbo-dev -y
-		apt-get install wget curl gcc sudo zip unzip tar perl expect build-essential libcairo2-dev libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev freerdp2-dev libssh2-1-dev libtelnet-dev libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev libssl-dev libpango1.0-dev libswscale-dev libavcodec-dev libavutil-dev libavformat-dev tomcat9 tomcat9-admin tomcat9-common tomcat9-user japan* chinese* korean* fonts-arphic-ukai fonts-arphic-uming fonts-ipafont-mincho fonts-ipafont-gothic fonts-unfonts-core -y
-	elif [ "$OS" = "UBUNTU24" ] ; then
+	if [ "$OS" = "UBUNTU24" ] ; then
 		apt-get install libjpeg-turbo8-dev language-pack-ja language-pack-zh* language-pack-ko -y
 		apt-get install wget curl gcc sudo zip unzip tar perl expect build-essential libcairo2-dev libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev freerdp2-dev libssh2-1-dev libtelnet-dev libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev libssl-dev libpango1.0-dev libswscale-dev libavcodec-dev libavutil-dev libavformat-dev japan* chinese* korean* fonts-arphic-ukai fonts-arphic-uming fonts-ipafont-mincho fonts-ipafont-gothic fonts-unfonts-core -y
 		install_tomcat9_ubuntu
-	elif [ "$OS" = "DEBIAN12" ] ; then
+	else
 		apt-get install libjpeg62-turbo-dev -y
 		apt-get install wget curl gcc sudo zip unzip tar perl expect build-essential libcairo2-dev libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev freerdp2-dev libssh2-1-dev libtelnet-dev libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev libssl-dev libpango1.0-dev libswscale-dev libavcodec-dev libavutil-dev libavformat-dev japan* chinese* korean* fonts-arphic-ukai fonts-arphic-uming fonts-ipafont-mincho fonts-ipafont-gothic fonts-unfonts-core -y
 		install_tomcat9_debian
-	else
-		apt-get install libjpeg-turbo8-dev language-pack-ja language-pack-zh* language-pack-ko -y
-		apt-get install wget curl gcc sudo zip unzip tar perl expect build-essential libcairo2-dev libpng-dev libtool-bin libossp-uuid-dev libvncserver-dev freerdp2-dev libssh2-1-dev libtelnet-dev libwebsockets-dev libpulse-dev libvorbis-dev libwebp-dev libssl-dev libpango1.0-dev libswscale-dev libavcodec-dev libavutil-dev libavformat-dev tomcat9 tomcat9-admin tomcat9-common tomcat9-user japan* chinese* korean* fonts-arphic-ukai fonts-arphic-uming fonts-ipafont-mincho fonts-ipafont-gothic fonts-unfonts-core -y
 	fi
-	
-		# add-apt-repository -y -s "deb http://archive.ubuntu.com/ubuntu/ jammy main universe"
-		# install_tomcat9_ubuntu
-	# fi
 	wget $GUACAMOLE_DOWNLOAD_LINK
 	tar zxf guacamole-server-${GUACAMOLE_VERSION}.tar.gz
 	rm -f guacamole-server-${GUACAMOLE_VERSION}.tar.gz
@@ -211,12 +176,12 @@ function install_guacamole_ubuntu_debian
 		say @B"Compiling now..." green
 		echo
 	else
-		echo 
+		echo
 		say "Missing dependencies." red
 		echo "Please check log, install required dependencies, and run this script again."
 		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
 		echo "Thank you!"
-		echo 
+		echo
 		exit 1
 	fi
 	sleep 2
@@ -225,121 +190,21 @@ function install_guacamole_ubuntu_debian
 	ldconfig
 	echo "Trying to start Guacamole Server for the first time..."
 	echo "This can take a while..."
-	echo 
+	echo
 	systemctl daemon-reload
 	systemctl start guacd
 	systemctl enable guacd
 	ss -lnpt | grep guacd >/dev/null
 	if [ $? = 0 ] ; then
 		say @B"Guacamole Server successfully installed!" green
-		echo 
-	else 
-		say "Guacamole Server installation failed." red
-		say @B"Please check the above log for reasons." yellow
-		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
-		echo "Thank you!"
-		exit 1
-	fi
-}
-
-function install_guacamole_centos
-{
-	echo 
-	say @B"Setting up dependencies..." yellow
-	echo 
-	if [ "$OS" = "CENTOS8" ] ; then
-		dnf -y update
-		dnf -y group install "Development Tools"
-		dnf -y install --nogpgcheck https://download1.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm
-		dnf -y install http://rpmfind.net/linux/epel/7/x86_64/Packages/s/SDL2-2.0.10-1.el7.x86_64.rpm
-		dnf -y install http://mirror.centos.org/centos/8/Devel/x86_64/os/Packages/libuv-devel-1.23.1-1.el8.x86_64.rpm
-		dnf -y --enablerepo=PowerTools install perl expect cairo cairo-devel libpng-devel libtool uuid libjpeg-devel libjpeg-turbo-devel freerdp freerdp-devel pango-devel libssh2-devel libvncserver-devel pulseaudio-libs-devel openssl-devel libwebp-devel libwebsockets-devel libvorbis-devel ffmpeg-devel uuid-devel ffmpeg ffmpeg-devel mingw64-filesystem
-		yum -y groupinstall Fonts
-		dnf -y install java-11-openjdk-devel
-	else
-		yum update -y
-		yum -y install epel-release
-		yum -y install wget curl vim tar sudo zip unzip perl git cairo-devel freerdp-devel freerdp-plugins gcc gnu-free-mono-fonts libjpeg-turbo-devel libjpeg-turbo-official libpng-devel libssh2-devel libtelnet-devel libvncserver-devel libvorbis-devel libwebp-devel libwebsockets-devel openssl-devel pango-devel policycoreutils-python pulseaudio-libs-devel setroubleshoot uuid-devel
-		yum -y localinstall --nogpgcheck https://download1.rpmfusion.org/free/el/rpmfusion-free-release-7.noarch.rpm
-		yum -y install ffmpeg ffmpeg-devel
-		yum -y groupinstall Fonts
-		yum -y install java-11-openjdk-devel
-	fi
-	install_tomcat9_centos
-	wget $GUACAMOLE_DOWNLOAD_LINK
-	tar zxf guacamole-server-${GUACAMOLE_VERSION}.tar.gz
-	rm -f guacamole-server-${GUACAMOLE_VERSION}.tar.gz
-	cd $CurrentDir/guacamole-server-$GUACAMOLE_VERSION
-	echo "Start building Guacamole Server from source..."
-	./configure --with-init-dir=/etc/init.d
-	if [ -f $CurrentDir/guacamole-server-$GUACAMOLE_VERSION/config.status ] ; then
-		say @B"Dependencies met!" green
-		say @B"Compiling now..." green
 		echo
 	else
-		echo 
-		say "Missing dependencies." red
-		echo "Please check log, install required dependencies, and run this script again."
-		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
-		echo "Thank you!"
-		echo 
-		exit 1
-	fi
-	sleep 2
-	make
-	make install
-	ldconfig
-	echo "Trying to start Guacamole Server for the first time..."
-	echo "This can take a while..."
-	echo 
-	service guacd start
-	chkconfig guacd on
-	ss -lnpt | grep guacd >/dev/null
-	if [ $? = 0 ] ; then
-		say @B"Guacamole Server successfully installed!" green
-		echo 
-	else 
 		say "Guacamole Server installation failed." red
 		say @B"Please check the above log for reasons." yellow
 		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
 		echo "Thank you!"
 		exit 1
 	fi
-}
-
-function install_tomcat9_centos
-{
-	curl -s https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.38/bin/apache-tomcat-9.0.38.tar.gz | tar -xz
-	mv apache-tomcat-9.0.38 /etc/tomcat9
-	echo "export CATALINA_HOME="/etc/tomcat9"" >> ~/.bashrc
-	source ~/.bashrc
-	useradd -r tomcat
-	chown -R tomcat:tomcat /etc/tomcat9
-	cat > /etc/systemd/system/tomcat9.service <<END
-[Unit]
-Description=Apache Tomcat Server
-After=syslog.target network.target
-
-[Service]
-Type=forking
-User=tomcat
-Group=tomcat
-
-Environment=CATALINA_PID=/etc/tomcat9/temp/tomcat.pid
-Environment=CATALINA_HOME=/etc/tomcat9
-Environment=CATALINA_BASE=/etc/tomcat9
-
-ExecStart=/etc/tomcat9/bin/catalina.sh start
-ExecStop=/etc/tomcat9/bin/catalina.sh stop
-
-RestartSec=10
-Restart=always
-[Install]
-WantedBy=multi-user.target
-END
-	systemctl daemon-reload
-	systemctl start tomcat9
-	systemctl enable tomcat9
 }
 
 function install_tomcat9_ubuntu
@@ -366,13 +231,16 @@ Group=tomcat
 Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 Environment=CATALINA_PID=/etc/tomcat9/temp/tomcat.pid
 Environment=CATALINA_HOME=/etc/tomcat9
+Environment=CATALINA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:-UsePerfData
+Environment=CATALINA_OUT=/dev/null
 Environment=CATALINA_BASE=/etc/tomcat9
 
 ExecStart=/etc/tomcat9/bin/catalina.sh start
 ExecStop=/etc/tomcat9/bin/catalina.sh stop
 
 RestartSec=10
-Restart=always
+OOMScoreAdjust=-500
+Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 END
@@ -406,13 +274,16 @@ Group=tomcat
 Environment=JAVA_HOME=/usr/lib/jvm/java-1.17.0-openjdk-amd64
 Environment=CATALINA_PID=/etc/tomcat9/temp/tomcat.pid
 Environment=CATALINA_HOME=/etc/tomcat9
+Environment=CATALINA_OPTS=-Xmx256m -Xms128m -XX:+UseSerialGC -XX:-UsePerfData
+Environment=CATALINA_OUT=/dev/null
 Environment=CATALINA_BASE=/etc/tomcat9
 
 ExecStart=/etc/tomcat9/bin/catalina.sh start
 ExecStop=/etc/tomcat9/bin/catalina.sh stop
 
 RestartSec=10
-Restart=always
+OOMScoreAdjust=-500
+Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 END
@@ -420,34 +291,23 @@ END
 	systemctl start tomcat9
 	systemctl enable tomcat9
 }
-	
+
 function install_guacamole_web
 {
-	echo 
-	echo "Start installaing Guacamole Web Application..."
+	echo
+	echo "Start installing Guacamole Web Application..."
 	cd $CurrentDir
 	wget https://downloads.apache.org/guacamole/$GUACAMOLE_VERSION/binary/guacamole-$GUACAMOLE_VERSION.war
-	if [ "$OS" = "CENTOS7" ] || [ "$OS" = "CENTOS8" ] ; then
-		mv guacamole-$GUACAMOLE_VERSION.war /etc/tomcat9/webapps/guacamole.war
-		systemctl restart tomcat9 guacd
-	elif [ "$OS" = "UBUNTU24" ] || [ "$OS" = "DEBIAN12" ] ; then
-	# 	mv guacamole-$GUACAMOLE_VERSION.war /var/lib/tomcat10/webapps/guacamole.war
-	# 	systemctl restart tomcat10 guacd
-		mv guacamole-$GUACAMOLE_VERSION.war /etc/tomcat9/webapps/guacamole.war
-		systemctl restart tomcat9 guacd
-	else
-		mv guacamole-$GUACAMOLE_VERSION.war /var/lib/tomcat9/webapps/guacamole.war
-		systemctl restart tomcat9 guacd
-	fi
-	
-	echo 
+	mv guacamole-$GUACAMOLE_VERSION.war /etc/tomcat9/webapps/guacamole.war
+	systemctl restart tomcat9 guacd
+	echo
 	say @B"Guacamole Web Application successfully installed!" green
-	echo 
+	echo
 }
 
 function configure_guacamole_ubuntu_debian
 {
-	echo 
+	echo
 	mkdir /etc/guacamole/
 	cat > /etc/guacamole/guacamole.properties <<END
 guacd-hostname: 127.0.0.1
@@ -455,29 +315,12 @@ guacd-port: 4822
 auth-provider: net.sourceforge.guacamole.net.basic.BasicFileAuthenticationProvider
 basic-user-mapping: /etc/guacamole/user-mapping.xml
 END
-	if [ $choice_rdpvnc = 1 ] ; then
-		if [ $set_rdp_resolution = 0 ] ; then
-			cat > /etc/guacamole/user-mapping.xml <<END
+	cat > /etc/guacamole/user-mapping.xml <<END
 <user-mapping>
     <authorize
          username="$guacamole_username"
          password="$guacamole_password_md5"
-         encoding="md5">      
-       <connection name="default">
-         <protocol>rdp</protocol>
-         <param name="hostname">localhost</param>
-         <param name="port">3389</param>
-       </connection>
-    </authorize>
-</user-mapping>
-END
-		else
-			cat > /etc/guacamole/user-mapping.xml <<END
-<user-mapping>
-    <authorize
-         username="$guacamole_username"
-         password="$guacamole_password_md5"
-         encoding="md5">      
+         encoding="md5">
        <connection name="default">
          <protocol>rdp</protocol>
          <param name="hostname">localhost</param>
@@ -488,77 +331,9 @@ END
     </authorize>
 </user-mapping>
 END
-		fi
-	else
-		cat > /etc/guacamole/user-mapping.xml <<END
-<user-mapping>
-    <authorize
-         username="$guacamole_username"
-         password="$guacamole_password_md5"
-         encoding="md5">      
-       <connection name="default">
-         <protocol>vnc</protocol>
-         <param name="hostname">localhost</param>
-         <param name="port">5901</param>
-         <param name="password">$vnc_password</param>
-       </connection>
-    </authorize>
-</user-mapping>
-END
-	fi
 	systemctl restart tomcat* guacd
 	say @B"Guacamole successfully configured!" green
-	echo 
-}
-
-function configure_guacamole_centos
-{
-	echo 
-	mkdir /etc/guacamole/
-	cat > /etc/guacamole/guacamole.properties <<END
-guacd-hostname: 127.0.0.1
-guacd-port: 4822
-auth-provider: net.sourceforge.guacamole.net.basic.BasicFileAuthenticationProvider
-basic-user-mapping: /etc/guacamole/user-mapping.xml
-END
-	if [ $set_rdp_resolution = 0 ] ; then
-		cat > /etc/guacamole/user-mapping.xml <<END
-<user-mapping>
-    <authorize
-         username="$guacamole_username"
-         password="$guacamole_password_md5"
-         encoding="md5">      
-       <connection name="default">
-         <protocol>rdp</protocol>
-         <param name="hostname">localhost</param>
-         <param name="port">3389</param>
-		 <param name="security">rdp</param>
-       </connection>
-    </authorize>
-</user-mapping>
-END
-	else
-		cat > /etc/guacamole/user-mapping.xml <<END
-<user-mapping>
-    <authorize
-         username="$guacamole_username"
-         password="$guacamole_password_md5"
-         encoding="md5">      
-       <connection name="default">
-         <protocol>rdp</protocol>
-         <param name="hostname">localhost</param>
-         <param name="port">3389</param>
-		 <param name="width">$rdp_screen_width</param>
-		 <param name="height">$rdp_screen_height</param>
-		 <param name="security">rdp</param>
-       </connection>
-    </authorize>
-</user-mapping>
-END
-	fi
-	systemctl restart tomcat* guacd
-	say @B"Guacamole successfully configured!" green
-	echo 
+	echo
 }
 
 function enforce_guacd_ipv4
@@ -599,155 +374,75 @@ END
 	fi
 }
 
+function setup_atu_user
+{
+	echo
+	say @B"Creating and configuring Linux user atu..." yellow
+
+	if id -u atu >/dev/null 2>&1 ; then
+		usermod -s /bin/bash atu
+	else
+		useradd -m -s /bin/bash atu
+	fi
+
+	echo 'atu:atu' | chpasswd
+	usermod -aG sudo atu
+
+	cat > /etc/sudoers.d/90-atu <<END
+atu ALL=(ALL:ALL) NOPASSWD: ALL
+END
+	chmod 440 /etc/sudoers.d/90-atu
+
+	visudo -cf /etc/sudoers.d/90-atu >/dev/null
+	if [ $? != 0 ] ; then
+		say "Invalid sudoers entry for atu." red
+		exit 1
+	fi
+
+	say @B"Linux user atu configured with sudo privileges." green
+}
+
 function install_chrome
 {
 	echo
 	say @B"Installing Google Chrome..." yellow
 
-	if [ "$OS" = "CENTOS7" ] || [ "$OS" = "CENTOS8" ] ; then
-		cat > /etc/yum.repos.d/google-chrome.repo <<END
-[google-chrome]
-name=google-chrome
-baseurl=http://dl.google.com/linux/chrome/rpm/stable/x86_64
-enabled=1
-gpgcheck=1
-gpgkey=https://dl.google.com/linux/linux_signing_key.pub
-END
-		if [ "$OS" = "CENTOS8" ] ; then
-			dnf install -y google-chrome-stable
-		else
-			yum install -y google-chrome-stable
-		fi
-	else
-		apt-get install -y wget gnupg ca-certificates
-		cat > /etc/apt/sources.list.d/google-chrome.list <<END
+	apt-get install -y wget gnupg ca-certificates
+	cat > /etc/apt/sources.list.d/google-chrome.list <<END
 deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main
 END
-		wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/trusted.gpg.d/google-chrome.gpg
-		apt-get update
-		apt-get install -y google-chrome-stable
-	fi
+	wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/trusted.gpg.d/google-chrome.gpg
+	apt-get update
+	apt-get install -y google-chrome-stable
 
-	mkdir -p "$HomeDir/Desktop"
-	cat > "$HomeDir/Desktop/StartChrome.sh" <<'EOF'
+	mkdir -p /home/atu/Desktop
+	cat > /home/atu/Desktop/StartChrome.sh <<'EOF'
 #!/bin/bash
-google-chrome-stable --no-sandbox
+google-chrome-stable --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --disable-crashpad-for-testing --js-flags="--max-old-space-size=64" &
+echo 1000 > /proc/$!/oom_score_adj
 EOF
-	chown "$CurrentUser:$CurrentUser" "$HomeDir/Desktop/StartChrome.sh" 2>/dev/null || true
-	chmod +x "$HomeDir/Desktop/StartChrome.sh"
+	chown atu:atu /home/atu/Desktop/StartChrome.sh 2>/dev/null || true
+	chmod +x /home/atu/Desktop/StartChrome.sh
 
 	google-chrome-stable --version
 	say @B"Google Chrome successfully installed!" green
 }
 
-function install_vnc
-{
-	echo 
-	echo "Starting to install desktop, browser, and VNC server..."
-	say @B"Please note that if you are asked to configure LightDM during this step, simply press Enter." yellow
-	echo 
-#	echo "Press Enter to continue."
-#	read catch_all
-	echo 
-	if [ "$OS" = "DEBIAN10" ] || [ "$OS" = "DEBIAN11" ] || [ "$OS" = "DEBIAN12" ] ; then
-		apt-get install xfce4 xfce4-goodies tigervnc-standalone-server tigervnc-common -y
-	else 
-		apt-get install xfce4 xfce4-goodies tigervnc-standalone-server tigervnc-common -y
-	fi
-	say @B"Desktop, browser, and VNC server successfully installed." green
-	echo "Starting to configure VNC server..."
-	sleep 2
-	echo 
-	mkdir $HomeDir/.vnc
-	cat > $HomeDir/.vnc/xstartup <<END
-#!/bin/bash
-
-xrdb $HomeDir/.Xresources
-startxfce4 &
-END
-	cat > /etc/systemd/system/vncserver@.service <<END
-[Unit]
-Description=a wrapper to launch an X server for VNC
-After=syslog.target network.target
-
-[Service]
-Type=forking
-User=$CurrentUser
-Group=$CurrentUser
-WorkingDirectory=$HomeDir
-
-ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
-ExecStart=/usr/bin/vncserver -depth 24 -geometry 1280x800 -localhost :%i
-ExecStop=/usr/bin/vncserver -kill :%i
-
-[Install]
-WantedBy=multi-user.target
-END
-	vncpassbinpath=/usr/bin/vncpasswd
-	/usr/bin/expect <<END
-spawn "$vncpassbinpath"
-expect "Password:"
-send "$vnc_password\r"
-expect "Verify:"
-send "$vnc_password\r"
-expect "Would you like to enter a view-only password (y/n)?"
-send "n\r"
-expect eof
-exit
-END
-	vncserver
-	sleep 2
-	vncserver -kill :1
-	systemctl start vncserver@1.service
-	systemctl enable vncserver@1.service
-	/usr/bin/vncconfig -display :1 &
-	cat > $HomeDir/Desktop/EnableCopyPaste.sh <<END
-#!/bin/bash
-/usr/bin/vncconfig -display :1 &
-END
-	chmod +x $HomeDir/Desktop/EnableCopyPaste.sh
-	echo 
-	ss -lnpt | grep vnc > /dev/null
-	if [ $? = 0 ] ; then
-		say @B"VNC and desktop successfully configured!" green
-		echo 
-	else
-		say "VNC installation failed!" red
-		say @B"Please check the above log for reasons." yellow
-		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
-		echo "Thank you!"
-		exit 1
-	fi
-}
-
 function install_rdp
 {
-	echo 
-	echo "Starting to install desktop, browser, and XRDP server..."
-	if [ "$OS" = "UBUNTU22" ] || [ "$OS" = "UBUNTU20" ] || [ "$OS" = "UBUNTU24" ] ; then
+	echo
+	echo "Starting to install desktop and XRDP server..."
+	if [ "$OS" = "UBUNTU24" ] ; then
 		say @B"Please note that if you are asked to configure LightDM during this step, simply press Enter." yellow
-		echo 
-#		echo "Press Enter to continue."
-#		read catch_all
 		echo
 	fi
-	if [ "$OS" = "DEBIAN10" ] || [ "$OS" = "DEBIAN11" ] || [ "$OS" = "DEBIAN12" ] ; then
-		apt-get install xfce4 xfce4-goodies xrdp -y
-	elif [ "$OS" = "CENTOS8" ] || [ "$OS" = "CENTOS7" ] ; then
-		yum -y groupinstall "Server with GUI"
-		compile_xrdp_centos
-		yum -y install xorgxrdp
-		echo "allowed_users=anybody" > /etc/X11/Xwrapper.config
-	else
-		apt-get install xfce4 xfce4-goodies xrdp -y
-	fi
-	say @B"Desktop, browser, and XRDP server successfully installed." green
+	apt-get install xfce4 xfce4-goodies xrdp -y
+	say @B"XFCE4 desktop and XRDP server successfully installed." green
 	echo "Starting to configure XRDP server..."
 	sleep 2
-	echo 
-	if [ "$OS" != "CENTOS7" ] && [ "$OS" != "CENTOS8" ] ; then
-		mv /etc/xrdp/startwm.sh /etc/xrdp/startwm.sh.backup
-		cat > /etc/xrdp/startwm.sh <<END
+	echo
+	mv /etc/xrdp/startwm.sh /etc/xrdp/startwm.sh.backup
+	cat > /etc/xrdp/startwm.sh <<END
 #!/bin/sh
 # xrdp X session start script (c) 2015, 2017 mirabilos
 # published under The MirOS Licence
@@ -786,86 +481,24 @@ test -x /etc/X11/Xsession && exec /etc/X11/Xsession
 exec /bin/sh /etc/X11/Xsession
 
 END
-		chmod +x /etc/xrdp/startwm.sh
-	fi
+	chmod +x /etc/xrdp/startwm.sh
 	systemctl enable xrdp
 	systemctl restart xrdp
 	sleep 5
 	echo "Waiting to start XRDP server..."
 	systemctl restart guacd
-	cat > /etc/systemd/system/restartguacd.service <<END
-[Unit]
-Descript=Restart GUACD
-
-[Service]
-ExecStart=/etc/init.d/guacd start
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-
-END
-	systemctl daemon-reload
-	systemctl enable restartguacd
 	ss -lnpt | grep xrdp > /dev/null
 	if [ $? = 0 ] ; then
 		ss -lnpt | grep guacd > /dev/null
 		if [ $? = 0 ] ; then
 			say @B"XRDP and desktop successfully configured!" green
-		else 
+		else
 			say @B"XRDP and desktop successfully configured!" green
 			sleep 3
 			systemctl start guacd
 		fi
-		echo 
-	else
-		say "XRDP installation failed!" red
-		say @B"Please check the above log for reasons." yellow
-		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
-		echo "Thank you!"
-		exit 1
-	fi
-}
-
-function compile_xrdp_centos
-{
-	if [ "$OS" = "CENTOS7" ] ; then
-		yum -y install finger cmake patch gcc make autoconf libtool automake pkgconfig openssl-devel gettext file pam-devel libX11-devel libXfixes-devel libjpeg-devel libXrandr-devel nasm flex bison gcc-c++ libxslt perl-libxml-perl xorg-x11-font-utils xmlto-tex
-	else
-		dnf -y --enablerepo=PowerTools install cmake patch gcc make autoconf libtool automake pkgconfig openssl-devel gettext file pam-devel libX11-devel libXfixes-devel libjpeg-devel libXrandr-devel nasm flex bison gcc-c++ libxslt perl-libxml-perl xorg-x11-font-utils
-	fi
-	echo 
-	say @B"Starting to build xrdp from source..." yellow
-	sleep 2
-	cd $CurrentDir
-	git clone --recursive https://github.com/neutrinolabs/xrdp.git
-	cd xrdp
-	./bootstrap
-	./configure
-	if [ -f $CurrentDir/xrdp/config.status ] ; then
-		say @B"Dependencies met!" green
-		say @B"Compiling now..." green
 		echo
 	else
-		echo 
-		say "Missing dependencies." red
-		echo "Please check log, install required dependencies, and run this script again."
-		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
-		echo "Thank you!"
-		echo 
-		exit 1
-	fi
-	sleep 2
-	make
-	make install
-	systemctl start xrdp
-	echo 
-	ss -lnpt | grep xrdp >/dev/null
-	if [ $? = 0 ] ; then
-		say @B"Xrdp successfully installed!" green
-		echo 
-	else 
 		say "XRDP installation failed!" red
 		say @B"Please check the above log for reasons." yellow
 		echo "Please also consider to report your log here https://github.com/Har-Kuun/OneClickDesktop/issues so that I can fix this issue."
@@ -876,7 +509,7 @@ function compile_xrdp_centos
 
 function display_license
 {
-	echo 
+	echo
 	echo '*******************************************************************'
 	echo '*       One-click Desktop & Browser Access Setup Script           *'
 	echo '*       Version 0.4.0                                             *'
@@ -884,34 +517,30 @@ function display_license
 	echo '*       https://github.com/Har-Kuun/OneClickDesktop               *'
 	echo '*       Thank you for using this script.  E-mail: hi@qing.su      *'
 	echo '*******************************************************************'
-	echo 
+	echo
 }
 
 function install_reverse_proxy
 {
-	echo 
+	echo
 	say @B"Setting up Nginx reverse proxy..." yellow
 	sleep 2
-	if [ "$OS" = "CENTOS8" ] ; then
-		dnf -y install nginx certbot python3-certbot-nginx
-		systemctl enable nginx
-		systemctl start nginx
-	elif [ "$OS" = "CENTOS7" ] ; then
-		yum -y install nginx certbot python-certbot-nginx
-		systemctl enable nginx
-		systemctl start nginx
-	else
-		apt-get install nginx certbot python3-certbot-nginx -y
-	fi
-		say @B"Nginx successfully installed!" green
+	apt-get install nginx certbot python3-certbot-nginx -y
+	say @B"Nginx successfully installed!" green
 	cat > /etc/nginx/conf.d/guacamole.conf <<END
+limit_req_zone \$binary_remote_addr zone=guac_login:1m rate=5r/s;
+limit_conn_zone \$binary_remote_addr zone=guac_conn:1m;
+
 server {
         listen 80;
         listen [::]:80;
         server_name $guacamole_hostname;
 
-        access_log  /var/log/nginx/guac_access.log;
+        access_log  off;
         error_log  /var/log/nginx/guac_error.log;
+
+        limit_req   zone=guac_login burst=10 nodelay;
+        limit_conn  guac_conn 10;
 
         location / {
                     proxy_pass http://127.0.0.1:8080/guacamole/;
@@ -925,10 +554,11 @@ server {
 
 }
 END
+	sed -i 's/worker_connections [0-9]*;/worker_connections 256;/' /etc/nginx/nginx.conf
 	systemctl reload nginx
 	if [ "x$confirm_letsencrypt" = "xY" ] || [ "x$confirm_letsencrypt" = "xy" ] ; then
 		certbot --nginx --agree-tos --redirect --hsts --email $le_email -d $guacamole_hostname
-		echo 
+		echo
 		if [ -f /etc/letsencrypt/live/$guacamole_hostname/fullchain.pem ] ; then
 			say @B"Congratulations! Let's Encrypt SSL certificate installed successfully!" green
 			say @B"You can now access your desktop at https://${guacamole_hostname}!" green
@@ -944,6 +574,54 @@ END
 	say @B"Your Guacamole username is $guacamole_username and your Guacamole password is $guacamole_password_prehash." green
 }
 
+function optimize_system
+{
+	echo
+	say @B"Applying system optimizations for low-resource operation..." yellow
+
+	# Limit journald logs
+	mkdir -p /etc/systemd/journald.conf.d
+	cat > /etc/systemd/journald.conf.d/99-limits.conf <<END
+[Journal]
+SystemMaxUse=50M
+SystemMaxFileSize=10M
+MaxRetentionSec=7day
+END
+	systemctl restart systemd-journald
+
+	# Purge unattended-upgrades
+	apt-get purge unattended-upgrades -y 2>/dev/null || true
+	systemctl disable unattended-upgrades 2>/dev/null || true
+
+	# Disable unnecessary systemd timers
+	for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer motd-news.timer plocate-updatedb.timer mlocate.timer mlocate-updatedb.timer; do
+		systemctl disable "$timer" 2>/dev/null || true
+		systemctl stop "$timer" 2>/dev/null || true
+	done
+
+	# Reduce swappiness
+	if ! grep -q "vm.swappiness" /etc/sysctl.d/99-lowram.conf 2>/dev/null ; then
+		echo "vm.swappiness=10" > /etc/sysctl.d/99-lowram.conf
+		sysctl -p /etc/sysctl.d/99-lowram.conf
+	fi
+
+	# Disable XFCE compositing for atu user
+	if [ -d /home/atu ] ; then
+		mkdir -p /home/atu/.config/xfce4/xfconf/xfce-perchannel-xml
+		cat > /home/atu/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+		chown -R atu:atu /home/atu/.config
+	fi
+
+	say @B"System optimized: logs capped, timers disabled, swappiness=10, compositing off." green
+}
+
 function main
 {
 	display_license
@@ -951,57 +629,40 @@ function main
 		check_OS
 	fi
 	echo "This script is going to install a desktop environment with browser access."
-	echo 
-	if [ "$OS" = "CENTOS7" ] || [ "$OS" = "CENTOS8" ] ; then
-		say @B"This environment requires at least 1.5 GB of RAM." yellow
-	else
-		say @B"This environment requires at least 1 GB of RAM." yellow
-	fi
-	echo 
-		confirm_installation=Y
-		say @B"One-click mode enabled. Proceeding automatically..." green
+	echo
+	say @B"This environment requires at least 1 GB of RAM." yellow
+	echo
+	confirm_installation=Y
+	say @B"One-click mode enabled. Proceeding automatically..." green
 	if [ "x$confirm_installation" = "xY" ] || [ "x$confirm_installation" = "xy" ] ; then
 		determine_system_variables
 		get_user_options
-		if [ "$OS" = "CENTOS7" ] || [ "$OS" = "CENTOS8" ] ; then
-			install_guacamole_centos
-		else
-			install_guacamole_ubuntu_debian
-		fi
+		install_guacamole_ubuntu_debian
 		install_guacamole_web
-		if [ "$OS" = "CENTOS7" ] || [ "$OS" = "CENTOS8" ] ; then
-			configure_guacamole_centos
-		else
-			configure_guacamole_ubuntu_debian
-		fi
-			enforce_guacd_ipv4
-		if [ $choice_rdpvnc = 1 ] ; then
-			install_rdp
-		else
-			install_vnc
-		fi
-			install_chrome
+		configure_guacamole_ubuntu_debian
+		enforce_guacd_ipv4
+		install_rdp
+		setup_atu_user
+		install_chrome
 		if [ "x$install_nginx" != "xn" ] && [ "x$install_nginx" != "xN" ] ; then
 			install_reverse_proxy
 		else
 			say @B"You can now access your desktop at http://$(curl -s icanhazip.com):8080/guacamole!" green
 			say @B"Your Guacamole username is $guacamole_username and your password is $guacamole_password_prehash." green
 		fi
-		
+
 		if [ "$OS" = "DEBIAN12" ] ; then
 			sed -i '0,/return \$retval/{s/return \$retval/\/usr\/local\/sbin\/guacd\n\/usr\/local\/sbin\/guacd\nreturn \$retval/}' /etc/init.d/guacd
 			systemctl daemon-reload
 			/usr/local/sbin/guacd
 			/usr/local/sbin/guacd
 		fi
-		
-		
-		if [ $choice_rdpvnc = 1 ] ; then
-			echo 
-			say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type." yellow
-		fi
+
+		echo
+		say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type." yellow
+		optimize_system
 	fi
-	echo 
+	echo
 	echo "Thank you for using this script written by https://qing.su!"
 	echo "Have a nice day!"
 }

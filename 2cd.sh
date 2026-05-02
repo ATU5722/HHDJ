@@ -210,12 +210,9 @@ function install_guacamole_ubuntu_debian
 function install_tomcat9_ubuntu
 {
 	apt-get install default-jre default-jdk -y
-	echo JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64" >> /etc/environment
-	source /etc/environment
 	curl -s https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.38/bin/apache-tomcat-9.0.38.tar.gz | tar -xz
 	mv apache-tomcat-9.0.38 /etc/tomcat9
-	echo "export CATALINA_HOME="/etc/tomcat9"" >> ~/.bashrc
-	source ~/.bashrc
+	rm -rf /etc/tomcat9/webapps/docs /etc/tomcat9/webapps/examples /etc/tomcat9/webapps/host-manager /etc/tomcat9/webapps/manager /etc/tomcat9/webapps/ROOT
 	useradd -r tomcat
 	chown -R tomcat:tomcat /etc/tomcat9
 	cat > /etc/systemd/system/tomcat9.service <<END
@@ -247,18 +244,17 @@ END
 	systemctl daemon-reload
 	systemctl start tomcat9
 	systemctl enable tomcat9
+	sed -i 's|port="8080" protocol="HTTP/1.1"|port="8080" address="127.0.0.1" protocol="HTTP/1.1"|' /etc/tomcat9/conf/server.xml
+	systemctl restart tomcat9
 }
 
 
 function install_tomcat9_debian
 {
 	apt-get install default-jre default-jdk -y
-	echo JAVA_HOME="/usr/lib/jvm/java-1.17.0-openjdk-amd64" >> /etc/environment
-	source /etc/environment
 	curl -s https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.38/bin/apache-tomcat-9.0.38.tar.gz | tar -xz
 	mv apache-tomcat-9.0.38 /etc/tomcat9
-	echo "export CATALINA_HOME="/etc/tomcat9"" >> ~/.bashrc
-	source ~/.bashrc
+	rm -rf /etc/tomcat9/webapps/docs /etc/tomcat9/webapps/examples /etc/tomcat9/webapps/host-manager /etc/tomcat9/webapps/manager /etc/tomcat9/webapps/ROOT
 	useradd -r tomcat
 	chown -R tomcat:tomcat /etc/tomcat9
 	cat > /etc/systemd/system/tomcat9.service <<END
@@ -290,6 +286,8 @@ END
 	systemctl daemon-reload
 	systemctl start tomcat9
 	systemctl enable tomcat9
+	sed -i 's|port="8080" protocol="HTTP/1.1"|port="8080" address="127.0.0.1" protocol="HTTP/1.1"|' /etc/tomcat9/conf/server.xml
+	systemctl restart tomcat9
 }
 
 function install_guacamole_web
@@ -400,6 +398,14 @@ END
 	fi
 
 	say @B"Linux user atu configured with sudo privileges." green
+
+	AUTOSTART_DIR="/home/atu/.config/autostart"
+	mkdir -p "$AUTOSTART_DIR"
+	for svc in xfce4-power-manager xfce4-screensaver xfce4-notifyd tumblerd; do
+		cp "/etc/xdg/autostart/${svc}.desktop" "$AUTOSTART_DIR/" 2>/dev/null
+		echo "Hidden=true" >> "$AUTOSTART_DIR/${svc}.desktop" 2>/dev/null
+	done
+	chown -R atu:atu "$AUTOSTART_DIR"
 }
 
 function install_chrome
@@ -415,15 +421,6 @@ END
 	apt-get update
 	apt-get install -y google-chrome-stable
 
-	mkdir -p /home/atu/Desktop
-	cat > /home/atu/Desktop/StartChrome.sh <<'EOF'
-#!/bin/bash
-google-chrome-stable --no-sandbox --disable-gpu --disable-dev-shm-usage --no-first-run --disable-crashpad-for-testing --js-flags="--max-old-space-size=64" &
-echo 1000 > /proc/$!/oom_score_adj
-EOF
-	chown atu:atu /home/atu/Desktop/StartChrome.sh 2>/dev/null || true
-	chmod +x /home/atu/Desktop/StartChrome.sh
-
 	google-chrome-stable --version
 	say @B"Google Chrome successfully installed!" green
 }
@@ -432,11 +429,18 @@ function install_rdp
 {
 	echo
 	echo "Starting to install desktop and XRDP server..."
-	if [ "$OS" = "UBUNTU24" ] ; then
-		say @B"Please note that if you are asked to configure LightDM during this step, simply press Enter." yellow
-		echo
-	fi
 	apt-get install xfce4 xfce4-goodies xrdp -y
+	if [ "$OS" = "UBUNTU24" ] ; then
+		systemctl disable lightdm 2>/dev/null || true
+		systemctl stop lightdm 2>/dev/null || true
+		apt-get purge gnome-session-bin gnome-session-common gnome-initial-setup evolution-data-server -y 2>/dev/null || true
+	fi
+	mkdir -p /etc/systemd/system/xrdp.service.d
+	cat > /etc/systemd/system/xrdp.service.d/oom.conf <<END
+[Service]
+OOMScoreAdjust=-500
+END
+	systemctl daemon-reload
 	say @B"XFCE4 desktop and XRDP server successfully installed." green
 	echo "Starting to configure XRDP server..."
 	sleep 2
@@ -483,6 +487,9 @@ exec /bin/sh /etc/X11/Xsession
 END
 	chmod +x /etc/xrdp/startwm.sh
 	systemctl enable xrdp
+	systemctl restart xrdp
+	sleep 2
+	sed -i 's/^port=3389/port=tcp:\/\/127.0.0.1:3389/' /etc/xrdp/xrdp.ini 2>/dev/null || true
 	systemctl restart xrdp
 	sleep 5
 	echo "Waiting to start XRDP server..."
@@ -660,6 +667,9 @@ function main
 
 		echo
 		say @B"Note that after entering Guacamole using the above Guacamole credentials, you will be asked to input your Linux server username and password in the XRDP login panel, which is NOT the guacamole username and password above.  Please use the default Xorg as session type." yellow
+		say @B"Cleaning up build dependencies and package cache..." yellow
+		apt-get autoremove --purge -y
+		apt-get clean
 		optimize_system
 	fi
 	echo

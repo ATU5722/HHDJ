@@ -54,7 +54,7 @@
         '#itshop_outer' : ['items', 'artifact'], //物品商店
         '#eqshop_outer' : ['equipsName'], //装备商店
         '#equipcount' : ['equipCounter'], //装备商店/整理/修理等页面的计数器文本
-        '#armory_outer' : ['upgrades', 'items', 'equipsName', 'equipsInfo', 'character'], //装备库（异世界）外层容器，包含材料翻译（items在equipsName之前，避免材料名称被装备名称部分匹配）
+        '#armory_outer' : ['upgrades', 'items', 'equipsName'， 'equipsInfo', 'character'], //装备库（异世界）外层容器，包含材料翻译（items在equipsName之前，避免材料名称被装备名称部分匹配）
         '#equipselect_outer' : ['equipsName', 'equipsInfo', 'character'], //装备切换页面（异世界），静态内容（装备列表、装备信息）
         '#itemlist' : ['items'], //材料列表（异世界分解页面），动态监听翻译
         '#confirm_outer' : ['upgrades', 'items', 'battle', 'equipsName', 'equipsInfo'], //确认操作对话框（出售、购买、分解、道具界进入等），可能显示材料清单、装备名和装备属性

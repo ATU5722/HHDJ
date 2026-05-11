@@ -408,21 +408,22 @@ END
 	chown -R atu:atu "$AUTOSTART_DIR"
 }
 
-function install_chrome
+function install_browser
 {
 	echo
-	say @B"Installing Google Chrome..." yellow
+	say @B"Installing Brave browser..." yellow
 
-	apt-get install -y wget gnupg ca-certificates
-	cat > /etc/apt/sources.list.d/google-chrome.list <<END
-deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main
+	apt-get install -y curl apt-transport-https
+	curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+		https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+	cat > /etc/apt/sources.list.d/brave-browser-release.list <<END
+deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main
 END
-	wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/trusted.gpg.d/google-chrome.gpg
 	apt-get update
-	apt-get install -y google-chrome-stable
+	apt-get install -y brave-browser
 
-	google-chrome-stable --version
-	say @B"Google Chrome successfully installed!" green
+	brave-browser --version
+	say @B"Brave browser successfully installed!" green
 }
 
 function install_rdp
@@ -431,9 +432,24 @@ function install_rdp
 	echo "Starting to install desktop and XRDP server..."
 	apt-get install xfce4 xfce4-goodies xrdp -y
 	if [ "$OS" = "UBUNTU24" ] ; then
-		systemctl disable lightdm 2>/dev/null || true
-		systemctl stop lightdm 2>/dev/null || true
-		apt-get purge gnome-session-bin gnome-session-common gnome-initial-setup evolution-data-server -y 2>/dev/null || true
+		if systemctl list-unit-files | grep -q '^lightdm\.service' ; then
+			systemctl disable lightdm 2>/dev/null || true
+			systemctl stop lightdm 2>/dev/null || true
+		fi
+		if systemctl list-unit-files | grep -q '^gdm3\.service' ; then
+			systemctl disable gdm3 2>/dev/null || true
+			systemctl stop gdm3 2>/dev/null || true
+		fi
+		if ! apt-get purge gnome-session-bin gnome-session-common gnome-initial-setup evolution-data-server -y >/dev/null 2>&1 ; then
+			say "Warning: Failed to clean GNOME-related components. Press SPACE to continue." yellow
+			while true; do
+				IFS= read -r -n 1 key
+				if [ "x$key" = "x " ] ; then
+					echo
+					break
+				fi
+			done
+		fi
 	fi
 	mkdir -p /etc/systemd/system/xrdp.service.d
 	cat > /etc/systemd/system/xrdp.service.d/oom.conf <<END
@@ -445,7 +461,9 @@ END
 	echo "Starting to configure XRDP server..."
 	sleep 2
 	echo
-	mv /etc/xrdp/startwm.sh /etc/xrdp/startwm.sh.backup
+	if [ ! -f /etc/xrdp/startwm.sh.backup ] ; then
+		mv /etc/xrdp/startwm.sh /etc/xrdp/startwm.sh.backup
+	fi
 	cat > /etc/xrdp/startwm.sh <<END
 #!/bin/sh
 # xrdp X session start script (c) 2015, 2017 mirabilos
@@ -650,7 +668,7 @@ function main
 		enforce_guacd_ipv4
 		install_rdp
 		setup_atu_user
-		install_chrome
+		install_browser
 		if [ "x$install_nginx" != "xn" ] && [ "x$install_nginx" != "xN" ] ; then
 			install_reverse_proxy
 		else
